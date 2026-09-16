@@ -1,0 +1,18 @@
+{
+  "name": "Tech Verse — ওয়েব ও PWA ডেভেলপমেন্ট এজেন্সি",
+  "short_name": "Tech Verse",
+  "description": "পিওর JavaScript ও CSS দিয়ে তৈরি আধুনিক ওয়েব অ্যাপ, PWA ও Firebase সল্যুশন।",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0B0E14",
+  "theme_color": "#0B0E14",
+  "lang": "bn",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%230B0E14'/%3E%3Ctext x='50' y='66' font-size='58' text-anchor='middle' fill='%2335D0A0' font-family='monospace'%3E%3C/%3E%3C/text%3E%3C/svg%3E",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
