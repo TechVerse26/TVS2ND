@@ -142,8 +142,9 @@ match /counters/{counterId} {
       allow delete: if isAdmin();
     }
 
-    /* ---------- সাইট সেটিংস (হোমপেজ হিরো + ফিচার্ড ভিডিও + পেমেন্ট নাম্বার + পারচেজ পজ সুইচ) ----------
-       docId "homepage", "purchases" ইত্যাদি সবাই পড়তে পারবে (লগআউট অবস্থাতেও),
+    /* ---------- সাইট সেটিংস (হোমপেজ হিরো + ফিচার্ড ভিডিও + পেমেন্ট নাম্বার + পারচেজ পজ সুইচ + Tech Verse-এর
+       হিরো/WhatsApp সেটিংস — docId="site") ----------
+       docId "homepage", "purchases", "site" ইত্যাদি সবাই পড়তে পারবে (লগআউট অবস্থাতেও),
        শুধু "payment" (পেমেন্ট নাম্বার) পড়তে লগইন লাগবে — বাকি সব নিচের একই rule কভার করে। */
     match /settings/{docId} {
       allow read: if docId != "payment" || isSignedIn();
@@ -293,35 +294,40 @@ match /counters/{counterId} {
       }
     }
 
-    /* ---------- Tech Verse মূল সাইট: পাবলিক কন্টেন্ট কালেকশন
-       (সার্ভিস, পোর্টফোলিও, কেস স্টাডি, টেস্টিমোনিয়াল, টিম, স্ট্যাটস, প্রাইসিং প্ল্যান, FAQ) ----------
-       সবাই পড়তে পারবে (পাবলিক ওয়েবসাইট, লগআউট অবস্থাতেও), শুধু অ্যাডমিন লিখতে/এডিট/ডিলিট করতে পারবে। */
-    match /services/{id}     { allow read: if true; allow write: if isAdmin(); }
-    match /portfolio/{id}    { allow read: if true; allow write: if isAdmin(); }
-    match /caseStudies/{id}  { allow read: if true; allow write: if isAdmin(); }
-    match /testimonials/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /team/{id}         { allow read: if true; allow write: if isAdmin(); }
-    match /stats/{id}        { allow read: if true; allow write: if isAdmin(); }
-    match /pricingPlans/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /faqItems/{id}     { allow read: if true; allow write: if isAdmin(); }
+    /* =====================================================================
+       Tech Verse (TVS2ND-main) — এজেন্সি/বুকিং সাইট
+       নিচের সবকটা নতুন — উপরের বিদ্যমান কোনো rule স্পর্শ করা হয়নি।
+       এখানেও উপরের একই isAdmin() ফাংশন ব্যবহার হচ্ছে (users/{uid}.isAdmin == true) —
+       অর্থাৎ আলাদা কোনো রোল সিস্টেম নেই; যাদের ইতিমধ্যে isAdmin: true আছে, তারাই
+       এই কন্টেন্টও ম্যানেজ করতে পারবেন।
+       ===================================================================== */
 
-    /* ---------- Tech Verse মূল সাইট: বুকিং ফর্ম ----------
-       - create: যে কেউ (লগইন ছাড়াও) বুকিং জমা দিতে পারবে (পাবলিক বুকিং ফর্ম)।
-         তবে দুইটা জিনিস জোর করে যাচাই হয়: (ক) ফর্মে uid ফিল্ড থাকলে সেটা অবশ্যই
-         নিজের auth.uid-ই হতে হবে — অন্য কারো uid বসিয়ে তার নামে বুকিং তৈরি করা
-         যাবে না, (খ) status ফিল্ড থাকলে সেটা অবশ্যই "pending" দিয়েই শুরু হতে
-         হবে — কেউ নিজেই নিজের বুকিং সরাসরি "confirmed" বানিয়ে জমা দিতে পারবে না
-         (purchaseRequests-এ ব্যবহৃত একই প্যাটার্ন)।
-       - read: নিজের বুকিং (uid মিলিয়ে) অথবা অ্যাডমিন।
-       - update/delete: শুধু অ্যাডমিন (স্ট্যাটাস কনফার্ম/বাতিল, রেকর্ড মোছা)। */
+    /* ---------- বুকিং ফর্মের অনুরোধ ----------
+       create: যে কেউ (লগইন ছাড়াও) জমা দিতে পারবে, কিন্তু দুটো জিনিস জোর করে যাচাই হয়:
+       (ক) uid ফিল্ড থাকলে সেটা null (অ্যানোনিমাস) বা নিজের auth.uid-ই হতে হবে —
+           অন্য কারো uid বসিয়ে তার নামে বুকিং তৈরি করা যাবে না;
+       (খ) status ফিল্ড থাকলে সেটা অবশ্যই "নতুন" দিয়েই শুরু হতে হবে (app.js এই মানই
+           পাঠায়) — কেউ নিজে থেকে সরাসরি "সম্পন্ন"/অন্য স্ট্যাটাস বসিয়ে জমা দিতে পারবে না। */
     match /bookings/{bookingId} {
       allow create: if
         (!('uid' in request.resource.data) ||
+          request.resource.data.uid == null ||
           (isSignedIn() && request.resource.data.uid == request.auth.uid)) &&
-        (!('status' in request.resource.data) || request.resource.data.status == "pending");
+        (!('status' in request.resource.data) || request.resource.data.status == "নতুন");
 
       allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
       allow update, delete: if isAdmin();
     }
+
+    /* ---------- সাইটের কন্টেন্ট — সার্ভিস, পোর্টফোলিও, কেস স্টাডি, টেস্টিমোনিয়াল, টিম,
+       স্ট্যাটস, প্রাইসিং, FAQ (অ্যাডমিন প্যানেল থেকে ম্যানেজ করা হয়) ---------- */
+    match /services/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /portfolio/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /caseStudies/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /testimonials/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /team/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /stats/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /pricingPlans/{id} { allow read: if true; allow write: if isAdmin(); }
+    match /faqItems/{id} { allow read: if true; allow write: if isAdmin(); }
   }
 }
