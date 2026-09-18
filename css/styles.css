@@ -396,42 +396,85 @@ h1,h2,h3{ font-family: var(--font-display); font-weight:600; letter-spacing:-.01
 
 /* ---------- Role badge (admin tag next to name) ---------- */
 .role-badge{
+  display:inline-flex; align-items:center; gap:5px;
   font-family: var(--font-mono); font-size:.7rem; font-weight:600; color: var(--accent-ink);
-  background: var(--accent); padding:3px 9px; border-radius:999px; letter-spacing:.02em;
+  background: var(--accent); padding:4px 10px 4px 8px; border-radius:999px; letter-spacing:.02em;
 }
+.role-badge svg{ flex-shrink:0; }
 
 /* ---------- Profile dashboard ---------- */
 .profile-view{ display:none; min-height:70vh; }
 .profile-view.active{ display:block; }
-.profile-head{ display:flex; align-items:center; gap:20px; padding:40px 0 28px; border-bottom:1px solid var(--border); }
-.profile-avatar-wrap{ width:76px; height:76px; border-radius:50%; overflow:hidden; border:1px solid var(--border); background:var(--surface-3); color:var(--accent); font-size:1.6rem; flex-shrink:0; }
+
+.profile-banner{
+  margin-top:36px; padding:28px 30px; background: var(--surface);
+  border:1px solid var(--border); border-top:2px solid var(--accent);
+  border-radius: var(--radius-m);
+}
+.profile-head{ display:flex; align-items:center; gap:20px; }
+.profile-avatar-wrap{
+  width:80px; height:80px; border-radius:50%; overflow:hidden; flex-shrink:0;
+  background:var(--surface-3); color:var(--accent); font-size:1.6rem;
+  box-shadow: 0 0 0 4px var(--surface), 0 0 0 5px var(--border);
+}
 .profile-head-info{ min-width:0; }
 .profile-name-row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-.profile-name-row h2{ font-size:1.3rem; }
-.profile-head-info .mono-sm{ color: var(--text-muted); }
+.profile-name-row h2{ font-size:1.35rem; }
+.profile-head-info .mono-sm{ color: var(--text-muted); margin-top:4px; display:inline-block; }
 
-.profile-stats{ display:grid; grid-template-columns: repeat(3,1fr); gap:1px; background: var(--border); border:1px solid var(--border); border-radius: var(--radius-m); overflow:hidden; margin:24px 0; }
-.profile-stat{ background: var(--surface); padding:20px 22px; }
-.profile-stat b{ display:block; font-family: var(--font-display); font-size:1.6rem; }
+.profile-stats{ display:grid; grid-template-columns: repeat(3,1fr); gap:1px; background: var(--border); border:1px solid var(--border); border-radius: var(--radius-m); overflow:hidden; margin:20px 0 24px; }
+.profile-stat{ background: var(--surface); padding:22px 24px; }
+.profile-stat-icon{ width:34px; height:34px; border-radius: var(--radius-s); display:flex; align-items:center; justify-content:center; margin-bottom:14px; }
+.profile-stat-icon.ps-total{ background: var(--surface-3); color: var(--text-muted); }
+.profile-stat-icon.ps-active{ background: color-mix(in srgb, var(--accent-2) 16%, transparent); color: var(--accent-2); }
+.profile-stat-icon.ps-done{ background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+.profile-stat b{ display:block; font-family: var(--font-display); font-size:1.7rem; }
 .profile-stat span{ font-size:.8rem; color: var(--text-faint); }
 
-.profile-grid{ display:grid; grid-template-columns: .9fr 1.4fr; gap:24px; margin-top:12px; padding-bottom:80px; }
+.profile-grid{ display:grid; grid-template-columns: .85fr 1.4fr; gap:24px; margin-top:12px; padding-bottom:80px; align-items:start; }
 .profile-panel{ border:1px solid var(--border); border-radius: var(--radius-m); padding:26px; background: var(--surface); }
-.profile-panel + .profile-panel{ margin-top:20px; }
-.profile-panel h3{ font-size:1rem; margin-bottom:18px; }
-.profile-nav a{ display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius: var(--radius-s); color: var(--text-muted); font-size:.9rem; margin-bottom:4px; }
-.profile-nav a.active, .profile-nav a:hover{ background: var(--surface-2); color: var(--text); }
+.profile-main .profile-panel + .profile-panel{ margin-top:20px; }
+.profile-grid > aside.profile-panel{ position:sticky; top:96px; }
+.profile-panel > h3{ font-size:1rem; margin-bottom:18px; }
+.profile-panel-head{ margin-bottom:20px; }
+.profile-panel-head h3{ display:flex; align-items:center; gap:10px; font-size:1rem; }
+.profile-panel-head h3 svg{ color: var(--accent); flex-shrink:0; }
+
+.profile-nav{ display:flex; flex-direction:column; gap:2px; margin-bottom:16px; }
+.profile-nav a{
+  display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius: var(--radius-s);
+  color: var(--text-muted); font-size:.9rem; border:1px solid transparent;
+  transition: background-color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+.profile-nav a svg{ flex-shrink:0; opacity:.85; }
+.profile-nav a:hover{ background: var(--surface-2); color: var(--text); }
+.profile-nav a.active{ background: var(--surface-2); color: var(--text); border-color: var(--border); }
+.profile-nav a.active svg{ color: var(--accent); opacity:1; }
 .profile-nav a.admin-link{ color: var(--accent); }
+.profile-nav a.admin-link svg{ color: var(--accent); opacity:1; }
 .profile-nav a.admin-link:hover{ background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.profile-logout{ display:flex; align-items:center; justify-content:center; gap:8px; }
 
-.booking-card{ border-top:1px solid var(--border); padding:16px 0; }
-.booking-card:first-child{ border-top:none; padding-top:2px; }
-.booking-card-top{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:8px; }
-.booking-card-top b{ font-size:.96rem; }
-.booking-meta{ display:flex; flex-wrap:wrap; gap:6px 16px; font-family: var(--font-mono); font-size:.76rem; color: var(--text-faint); }
+.booking-card{
+  border:1px solid var(--border); border-left:3px solid var(--border-strong); border-radius: var(--radius-s);
+  padding:16px 18px; background: var(--surface);
+  transition: background-color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease);
+}
+.booking-card + .booking-card{ margin-top:10px; }
+.booking-card:hover{ background: var(--surface-2); }
+.booking-card.st-contacted{ border-left-color: var(--info); }
+.booking-card.st-progress{ border-left-color: var(--accent-2); }
+.booking-card.st-done{ border-left-color: var(--accent); }
+.booking-card.st-cancelled{ border-left-color: var(--danger); }
+.booking-card-top{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; }
+.booking-card-title{ display:flex; align-items:center; gap:10px; min-width:0; }
+.booking-card-icon{ width:26px; height:26px; border-radius:6px; background: var(--surface-3); color: var(--text-muted); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.booking-card-icon svg{ width:14px; height:14px; }
+.booking-card-top b{ font-size:.96rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.booking-meta{ display:flex; flex-wrap:wrap; gap:6px 16px; font-family: var(--font-mono); font-size:.76rem; color: var(--text-faint); padding-left:36px; }
 
-.empty-state{ text-align:center; padding:46px 20px; color: var(--text-faint); }
-.empty-state-icon{ width:44px; height:44px; border-radius:50%; background: var(--surface-2); border:1px solid var(--border); color: var(--text-faint); display:flex; align-items:center; justify-content:center; margin:0 auto 14px; }
+.empty-state{ text-align:center; padding:48px 20px; color: var(--text-faint); }
+.empty-state-icon{ width:46px; height:46px; border-radius:50%; background: var(--surface-2); border:1px solid var(--border); color: var(--text-faint); display:flex; align-items:center; justify-content:center; margin:0 auto 16px; }
 .empty-state p{ font-size:.9rem; margin-bottom:16px; }
 
 /* ---------- Footer ---------- */
@@ -493,6 +536,7 @@ h1,h2,h3{ font-family: var(--font-display); font-weight:600; letter-spacing:-.01
   .book-panel{ grid-template-columns:1fr; }
   .footer-grid{ grid-template-columns: 1fr 1fr; }
   .profile-grid{ grid-template-columns:1fr; }
+  .profile-grid > aside.profile-panel{ position:static; }
 }
 @media (max-width: 560px){
   .section{ padding:64px 0; }
@@ -503,8 +547,10 @@ h1,h2,h3{ font-family: var(--font-display); font-weight:600; letter-spacing:-.01
   .footer-grid{ grid-template-columns: 1fr; }
   .hero-stats{ gap:22px; flex-wrap:wrap; }
   .nav-links{ top:72px; }
+  .profile-banner{ padding:22px 20px; }
   .profile-stats{ grid-template-columns: 1fr; }
   .profile-head{ flex-wrap:wrap; }
+  .booking-meta{ padding-left:0; }
   .toast-stack{ left:16px; right:16px; top:80px; }
   .toast{ max-width:none; min-width:0; }
 }
