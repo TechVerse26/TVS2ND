@@ -248,14 +248,17 @@
 <!-- ===== Profile view (অ্যাকাউন্ট ড্যাশবোর্ড) ===== -->
 <section class="profile-view" id="profileView">
   <div class="wrap">
-    <div class="profile-head">
-      <div class="profile-avatar-wrap" id="profileAvatarWrap"></div>
-      <div class="profile-head-info">
-        <div class="profile-name-row">
-          <h2 id="profileName"></h2>
-          <span class="role-badge" id="profileRoleBadge" hidden>অ্যাডমিন</span>
+
+    <div class="profile-banner">
+      <div class="profile-head">
+        <div class="profile-avatar-wrap" id="profileAvatarWrap"></div>
+        <div class="profile-head-info">
+          <div class="profile-name-row">
+            <h2 id="profileName"></h2>
+            <span class="role-badge" id="profileRoleBadge" hidden><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>অ্যাডমিন</span>
+          </div>
+          <span class="mono-sm" id="profileEmail"></span>
         </div>
-        <span class="mono-sm" id="profileEmail"></span>
       </div>
     </div>
 
@@ -265,16 +268,18 @@
       <aside class="profile-panel">
         <h3>প্রোফাইল</h3>
         <nav class="profile-nav">
-          <a href="#profile" class="active">অ্যাকাউন্ট সেটিংস</a>
-          <a href="./admin.html" id="adminNavLink" class="admin-link" hidden>অ্যাডমিন প্যানেল</a>
-          <a href="#home">← মূল সাইটে ফিরুন</a>
+          <a href="#profile" class="active"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h10M17 6h3M4 12h3M9 12h11M4 18h13M20 18h0"/><circle cx="14" cy="6" r="2"/><circle cx="6" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg><span>অ্যাকাউন্ট সেটিংস</span></a>
+          <a href="./admin.html" id="adminNavLink" class="admin-link" hidden><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg><span>অ্যাডমিন প্যানেল</span></a>
+          <a href="#home"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 12H5M11 6l-6 6 6 6"/></svg><span>মূল সাইটে ফিরুন</span></a>
         </nav>
-        <button class="btn btn-outline btn-block" id="logoutBtn" style="margin-top:18px;">লগ আউট</button>
+        <button class="btn btn-outline btn-block profile-logout" id="logoutBtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M9 21H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>লগ আউট</button>
       </aside>
-      <div>
-        <div class="profile-panel" style="margin-bottom:20px;">
-          <h3>অ্যাকাউন্টের তথ্য</h3>
-          <form id="profileForm">
+      <div class="profile-main">
+        <div class="profile-panel">
+          <div class="profile-panel-head">
+            <h3><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h10M17 6h3M4 12h3M9 12h11M4 18h13M20 18h0"/><circle cx="14" cy="6" r="2"/><circle cx="6" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></svg>অ্যাকাউন্টের তথ্য</h3>
+          </div>
+          <form id="profileForm" class="profile-form">
             <div class="field-row">
               <div class="field"><label>নাম</label><input type="text" name="pName"></div>
               <div class="field"><label>ফোন নম্বর</label><input type="tel" name="pPhone"></div>
@@ -283,7 +288,9 @@
           </form>
         </div>
         <div class="profile-panel">
-          <h3>আমার অনুরোধসমূহ</h3>
+          <div class="profile-panel-head">
+            <h3><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h5l1.5 3h5L16 12h5"/><rect x="3" y="6" width="18" height="14" rx="2"/></svg>আমার অনুরোধসমূহ</h3>
+          </div>
           <div id="profileBookings"></div>
         </div>
       </div>
