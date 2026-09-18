@@ -15,7 +15,7 @@ body.admin-body{ background: var(--bg); }
   display:flex; flex-direction:column; padding:20px 14px; position:sticky; top:0; height:100vh; overflow-y:auto;
 }
 .admin-brand{ display:flex; align-items:center; gap:10px; font-family:var(--font-display); font-weight:700; padding:8px 10px 20px; }
-.admin-brand .brand-mark{ width:28px; height:28px; border-radius:7px; background:var(--accent); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; font-family:var(--font-mono); font-size:.82rem; }
+.admin-brand .brand-logo{ height:24px; }
 .admin-nav{ display:flex; flex-direction:column; gap:2px; flex:1; }
 .admin-nav-label{ font-family:var(--font-mono); font-size:.7rem; color:var(--text-faint); text-transform:none; padding:16px 10px 6px; }
 .admin-nav-label:first-child{ padding-top:4px; }
