@@ -1,6 +1,8 @@
 // js/auth.js
 // সব ধরনের Firebase Authentication লজিক এখানে — ইমেইল/পাসওয়ার্ড, Google, GitHub,
 // পাসওয়ার্ড রিসেট, প্রোফাইল আপডেট এবং auth state পরিবর্তন হ্যান্ডলিং।
+// রোল/অ্যাডমিন-সংক্রান্ত হেল্পারও এখানে — বাস্তব নিরাপত্তা Firestore Security Rules-এ,
+// এই ফাংশনগুলো শুধু UI দেখানোর সিদ্ধান্তে সাহায্য করে।
 
 import { auth, db } from "./firebase-config.js";
 import {
@@ -40,7 +42,7 @@ export function friendlyAuthError(err) {
   return map[code] || "কিছু একটা সমস্যা হয়েছে, আবার চেষ্টা করুন।";
 }
 
-/** নতুন ইউজারের জন্য Firestore-এ প্রোফাইল ডকুমেন্ট তৈরি করে (না থাকলে) */
+/** নতুন ইউজারের জন্য Firestore-এ প্রোফাইল ডকুমেন্ট তৈরি করে (না থাকলে) — role ইচ্ছাকৃতভাবে সেট করা হয় না */
 async function ensureUserDoc(user) {
   const ref = doc(db, "users", user.uid);
   const snap = await getDoc(ref);
@@ -103,4 +105,18 @@ export async function saveUserProfile(uid, data) {
 
 export function watchAuthState(callback) {
   return onAuthStateChanged(auth, callback);
+}
+
+/* ---------------- Admin role হেল্পার ----------------
+   অ্যাডমিন প্যানেলে ঢোকার আগে UI-লেভেলে চেক করতে ব্যবহৃত হয়।
+   আসল সুরক্ষা Firestore Security Rules-এ isAdmin() ফাংশনের মাধ্যমে — এখানে না। */
+
+export function isAdminProfile(profile) {
+  return !!profile && profile.role === "admin";
+}
+
+export async function checkIsAdmin(uid) {
+  if (!uid) return false;
+  const profile = await getUserProfile(uid);
+  return isAdminProfile(profile);
 }

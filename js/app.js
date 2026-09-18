@@ -1,28 +1,34 @@
 // js/app.js
 // মূল এন্ট্রি পয়েন্ট — সব মডিউল এখানে একসাথে যুক্ত হয়।
+// কন্টেন্ট এখন Firestore থেকে আসে (js/content.js), স্ট্যাটিক data.js থেকে না —
+// অ্যাডমিন প্যানেলে কিছু পরিবর্তন করলে সাইট রিলোডেই সেটা এখানে দেখা যাবে।
 
-import {
-  services, portfolioItems, caseStudies, testimonials, team, stats, pricingPlans, faqItems
-} from "./data.js";
+import { getAllContent, getSettings } from "./content.js";
 import {
   renderServices, renderPortfolio, renderCaseStudies, renderStats,
-  renderTestimonials, renderTestimonialDots, renderTeam, renderPricing, renderFAQ
+  renderTestimonials, renderTestimonialDots, renderTeam, renderPricing, renderFAQ,
+  avatarOrLetter
 } from "./templates.js";
+import { icons } from "./icons.js";
 import { initScrollReveal, animateCounters, initHeroTerminal } from "./animations.js";
 import { showToast } from "./toast.js";
 import { initRouter, goTo } from "./router.js";
 import {
   registerWithEmail, loginWithEmail, loginWithGoogle, loginWithGithub,
-  resetPassword, logout, watchAuthState, getUserProfile, saveUserProfile, friendlyAuthError
+  resetPassword, logout, watchAuthState, getUserProfile, saveUserProfile,
+  friendlyAuthError, isAdminProfile
 } from "./auth.js";
+import { escapeHtml, parseAccent, formatDate, statusClass } from "./utils.js";
 import { db } from "./firebase-config.js";
 import {
   collection, addDoc, query, where, orderBy, getDocs, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
-const WHATSAPP_NUMBER = "8801957329211"; // 01957329211 -> আন্তর্জাতিক ফরম্যাট (+880)
-
 let currentUser = null;
+let siteContent = {
+  services: [], portfolio: [], caseStudies: [], testimonials: [], team: [], stats: [], pricingPlans: [], faqItems: []
+};
+let siteSettings = {};
 
 /* ---------------- Theme ---------------- */
 function initTheme() {
@@ -50,17 +56,53 @@ function initMobileNav() {
   );
 }
 
-/* ---------------- Render static content ---------------- */
-function renderContent() {
-  document.getElementById("servicesGrid").innerHTML = renderServices(services);
-  document.getElementById("portfolioGrid").innerHTML = renderPortfolio(portfolioItems);
-  document.getElementById("caseList").innerHTML = renderCaseStudies(caseStudies);
-  document.getElementById("statsStrip").innerHTML = renderStats(stats);
-  document.getElementById("tmSlides").innerHTML = renderTestimonials(testimonials);
-  document.getElementById("tmDots").innerHTML = renderTestimonialDots(testimonials);
-  document.getElementById("teamGrid").innerHTML = renderTeam(team);
-  document.getElementById("pricingGrid").innerHTML = renderPricing(pricingPlans);
-  document.getElementById("faqList").innerHTML = renderFAQ(faqItems);
+/* ---------------- Loading skeletons (Firestore থেকে কন্টেন্ট আসার আগ পর্যন্ত) ---------------- */
+function skeletonCards(n) {
+  return Array.from({ length: n }, () =>
+    `<div class="skel-card"><div class="skel-row skel" style="width:70%;"></div><div class="skel-row skel" style="width:92%;"></div><div class="skel-row skel" style="width:55%;"></div></div>`
+  ).join("");
+}
+function showLoadingSkeletons() {
+  ["servicesGrid", "portfolioGrid", "teamGrid", "pricingGrid"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = skeletonCards(id === "servicesGrid" ? 6 : 3);
+  });
+  const caseList = document.getElementById("caseList");
+  if (caseList) caseList.innerHTML = skeletonCards(2);
+  const faqList = document.getElementById("faqList");
+  if (faqList) faqList.innerHTML = skeletonCards(3);
+  const statsStrip = document.getElementById("statsStrip");
+  if (statsStrip) statsStrip.innerHTML = `<div class="skel-row skel" style="height:90px;width:100%;grid-column:1/-1;"></div>`;
+}
+
+/* ---------------- সেটিংস প্রয়োগ (হিরো টেক্সট, WhatsApp নম্বর, SEO) ---------------- */
+function applySettings(settings) {
+  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  set("heroEyebrow", settings.heroEyebrow);
+  const titleEl = document.getElementById("heroTitle");
+  if (titleEl) titleEl.innerHTML = parseAccent(settings.heroTitle);
+  set("heroSub", settings.heroSubtitle);
+  set("heroCtaPrimary", settings.heroCtaPrimary);
+  set("heroCtaSecondary", settings.heroCtaSecondary);
+
+  const metaDesc = document.querySelector('meta[name="description"]');
+  if (metaDesc && settings.seoDescription) metaDesc.setAttribute("content", settings.seoDescription);
+
+  const waLink = document.getElementById("footerWaLink");
+  if (waLink && settings.whatsappNumber) waLink.href = `https://wa.me/${settings.whatsappNumber}`;
+}
+
+/* ---------------- কন্টেন্ট রেন্ডার ---------------- */
+function renderContent(content) {
+  document.getElementById("servicesGrid").innerHTML = renderServices(content.services);
+  document.getElementById("portfolioGrid").innerHTML = renderPortfolio(content.portfolio);
+  document.getElementById("caseList").innerHTML = renderCaseStudies(content.caseStudies);
+  document.getElementById("statsStrip").innerHTML = renderStats(content.stats);
+  document.getElementById("tmSlides").innerHTML = renderTestimonials(content.testimonials);
+  document.getElementById("tmDots").innerHTML = renderTestimonialDots(content.testimonials);
+  document.getElementById("teamGrid").innerHTML = renderTeam(content.team);
+  document.getElementById("pricingGrid").innerHTML = renderPricing(content.pricingPlans);
+  document.getElementById("faqList").innerHTML = renderFAQ(content.faqItems);
   document.getElementById("year").textContent = new Date().getFullYear();
   buildServicePills();
 }
@@ -114,8 +156,8 @@ function initTestimonials() {
     const dot = e.target.closest(".tm-dot");
     if (dot) show(+dot.dataset.i);
   });
-  if (testimonials.length > 1) {
-    setInterval(() => show((idx + 1) % testimonials.length), 6000);
+  if (siteContent.testimonials.length > 1) {
+    setInterval(() => show((idx + 1) % siteContent.testimonials.length), 6000);
   }
 }
 
@@ -126,8 +168,8 @@ function initWhatsApp() {
   btn.addEventListener("mouseenter", () => tip.classList.add("show"));
   btn.addEventListener("mouseleave", () => tip.classList.remove("show"));
   btn.addEventListener("click", () => {
-    const msg = encodeURIComponent("আসসালামু আলাইকুম, আমি Tech Verse থেকে একটা প্রজেক্ট নিয়ে কথা বলতে চাই।");
-    window.open(`https://wa.me/${WHATSAPP_NUMBER}?text=${msg}`, "_blank");
+    const msg = encodeURIComponent(siteSettings.whatsappMessage || "");
+    window.open(`https://wa.me/${siteSettings.whatsappNumber}?text=${msg}`, "_blank");
   });
 }
 
@@ -253,15 +295,14 @@ function initAuthModal() {
   );
 }
 
-/* ---------------- Nav auth area (login button <-> user chip) ---------------- */
+/* ---------------- Nav auth area (লগইন বাটন <-> ইউজার চিপ) ---------------- */
 function renderNavAuthArea() {
   const area = document.getElementById("authAreaNav");
   if (currentUser) {
-    const letter = (currentUser.displayName || currentUser.email || "?").charAt(0).toUpperCase();
     area.innerHTML = `
       <button class="user-chip" id="userChipBtn">
-        ${currentUser.photoURL ? `<img src="${currentUser.photoURL}" alt="">` : `<span class="avatar-fallback">${letter}</span>`}
-        <span class="hide-mobile">${currentUser.displayName || "প্রোফাইল"}</span>
+        <span class="chip-avatar-wrap">${avatarOrLetter(currentUser.photoURL, currentUser.displayName || currentUser.email)}</span>
+        <span class="hide-mobile">${escapeHtml(currentUser.displayName || "প্রোফাইল")}</span>
       </button>`;
     document.getElementById("userChipBtn").addEventListener("click", () => goTo("profile"));
   } else {
@@ -277,8 +318,8 @@ function renderNavAuthArea() {
 function buildServicePills() {
   const wrap = document.getElementById("servicePills");
   if (!wrap) return;
-  wrap.innerHTML = services
-    .map((s, i) => `<button type="button" data-val="${s.title}"${i === 0 ? ' class="active"' : ""}>${s.title}</button>`)
+  wrap.innerHTML = siteContent.services
+    .map((s, i) => `<button type="button" data-val="${escapeHtml(s.title)}"${i === 0 ? ' class="active"' : ""}>${escapeHtml(s.title)}</button>`)
     .join("");
 }
 
@@ -286,7 +327,7 @@ function initBookingForm() {
   const steps = Array.from(document.querySelectorAll(".form-step"));
   const trackEls = Array.from(document.querySelectorAll(".step-track span"));
   let step = 0;
-  let chosenService = services[0]?.title || "";
+  let chosenService = siteContent.services[0]?.title || "";
 
   function show(i) {
     steps.forEach((s, idx) => s.classList.toggle("active", idx === i));
@@ -357,7 +398,7 @@ function initBookingForm() {
   );
 }
 
-/* ---------------- Profile view ---------------- */
+/* ---------------- Profile view (অ্যাকাউন্ট ড্যাশবোর্ড) ---------------- */
 async function renderProfileView() {
   if (!currentUser) {
     openAuthModal("login");
@@ -366,35 +407,51 @@ async function renderProfileView() {
   }
   document.getElementById("profileName").textContent = currentUser.displayName || "নাম দেওয়া হয়নি";
   document.getElementById("profileEmail").textContent = currentUser.email || "";
-  const avatar = document.getElementById("profileAvatarWrap");
-  const letter = (currentUser.displayName || currentUser.email || "?").charAt(0).toUpperCase();
-  avatar.innerHTML = currentUser.photoURL
-    ? `<img class="profile-avatar" src="${currentUser.photoURL}" alt="">`
-    : `<div class="profile-avatar">${letter}</div>`;
+  document.getElementById("profileAvatarWrap").innerHTML =
+    avatarOrLetter(currentUser.photoURL, currentUser.displayName || currentUser.email);
 
   const profile = await getUserProfile(currentUser.uid);
+  const admin = isAdminProfile(profile);
+  document.getElementById("profileRoleBadge").hidden = !admin;
+  document.getElementById("adminNavLink").hidden = !admin;
+
   const form = document.getElementById("profileForm");
   form.pName.value = profile?.name || currentUser.displayName || "";
   form.pPhone.value = profile?.phone || "";
 
-  // বুকিং হিস্টরি
+  const statsEl = document.getElementById("profileStats");
   const list = document.getElementById("profileBookings");
-  list.innerHTML = `<div class="empty-state">লোড হচ্ছে...</div>`;
+  statsEl.innerHTML = "";
+  list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${icons.inbox}</div><p>লোড হচ্ছে...</p></div>`;
+
   try {
     const q = query(collection(db, "bookings"), where("uid", "==", currentUser.uid), orderBy("createdAt", "desc"));
     const snap = await getDocs(q);
-    if (snap.empty) {
-      list.innerHTML = `<div class="empty-state">এখনো কোনো অনুরোধ পাঠানো হয়নি।</div>`;
+    const bookings = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    const done = bookings.filter((b) => b.status === "সম্পন্ন").length;
+    const active = bookings.length - done - bookings.filter((b) => b.status === "বাতিল").length;
+    statsEl.innerHTML = `
+      <div class="profile-stat"><b>${bookings.length}</b><span>মোট অনুরোধ</span></div>
+      <div class="profile-stat"><b>${active}</b><span>চলমান</span></div>
+      <div class="profile-stat"><b>${done}</b><span>সম্পন্ন</span></div>`;
+
+    if (bookings.length === 0) {
+      list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${icons.inbox}</div><p>এখনো কোনো অনুরোধ পাঠানো হয়নি।</p><button type="button" class="btn btn-primary btn-sm" id="profileStartBtn">প্রজেক্ট শুরু করুন</button></div>`;
+      document.getElementById("profileStartBtn")?.addEventListener("click", () => {
+        goTo("home");
+        requestAnimationFrame(() => document.getElementById("booking")?.scrollIntoView({ behavior: "smooth" }));
+      });
     } else {
-      list.innerHTML = snap.docs
-        .map((d) => {
-          const b = d.data();
-          return `<div class="booking-mini"><b>${b.service}</b><span>স্ট্যাটাস: ${b.status || "নতুন"}</span></div>`;
-        })
-        .join("");
+      list.innerHTML = bookings.map((b) => `
+        <div class="booking-card">
+          <div class="booking-card-top"><b>${escapeHtml(b.service || "—")}</b><span class="status-badge ${statusClass(b.status)}">${escapeHtml(b.status || "নতুন")}</span></div>
+          <div class="booking-meta"><span>${formatDate(b.createdAt)}</span>${b.budget ? `<span>${escapeHtml(b.budget)}</span>` : ""}</div>
+        </div>`).join("");
     }
-  } catch (_) {
-    list.innerHTML = `<div class="empty-state">বুকিং হিস্টরি লোড করা যায়নি।</div>`;
+  } catch (err) {
+    console.error(err);
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${icons.warn}</div><p>বুকিং হিস্টরি লোড করা যায়নি।</p></div>`;
   }
 }
 
@@ -443,10 +500,21 @@ function initPWA() {
 }
 
 /* ---------------- Init ---------------- */
-document.addEventListener("DOMContentLoaded", () => {
-  renderContent();
+document.addEventListener("DOMContentLoaded", async () => {
   initTheme();
   initMobileNav();
+  initPWA();
+  initHeroTerminal(document.getElementById("terminalBody"));
+  showLoadingSkeletons();
+
+  const [content, settings] = await Promise.all([getAllContent(), getSettings()]);
+  siteContent = content;
+  siteSettings = settings;
+  applySettings(settings);
+  renderContent(content);
+
+  initScrollReveal();
+  animateCounters();
   initPortfolioFilter();
   initFAQ();
   initTestimonials();
@@ -454,10 +522,6 @@ document.addEventListener("DOMContentLoaded", () => {
   initAuthModal();
   initBookingForm();
   initProfile();
-  initPWA();
-  initHeroTerminal(document.getElementById("terminalBody"));
-  initScrollReveal();
-  animateCounters();
 
   initRouter({ onHome: showHomeView, onProfile: showProfileViewShell });
 

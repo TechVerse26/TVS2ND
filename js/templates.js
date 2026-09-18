@@ -1,83 +1,104 @@
 // js/templates.js
-// data.js-এর কন্টেন্ট থেকে প্রতিটি সেকশনের HTML তৈরি করে।
+// Firestore থেকে আসা কন্টেন্ট থেকে প্রতিটি সেকশনের HTML তৈরি করে।
+// প্রতিটা ডাইনামিক ভ্যালু escapeHtml() দিয়ে বসানো হয় — শুধু সিকিউরিটির জন্য না, বরং
+// যাতে কারো কনটেন্টে হঠাৎ &, <, > থাকলেও পুরো লেআউট ভেঙে না যায় (এটাই আগের "আইকন/ফিচার
+// ঠিকভাবে দেখা যায় না" সমস্যাগুলোর একটা সাধারণ কারণ হতে পারে)।
 
-const icons = {
-  code: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 6 2 12l6 6M16 6l6 6-6 6"/></svg>',
-  device: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M11 18h2"/></svg>',
-  server: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><circle cx="7" cy="7" r=".6" fill="currentColor"/><circle cx="7" cy="17" r=".6" fill="currentColor"/></svg>',
-  layout: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>',
-  link: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>',
-  shield: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>',
-  check: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M20 6 9 17l-5-5"/></svg>',
-  plus: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
-  arrow: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>'
-};
+import { icons, icon } from "./icons.js";
+import { escapeHtml } from "./utils.js";
+
+function initial(name) {
+  return (name || "?").trim().charAt(0).toUpperCase() || "?";
+}
+
+/** ছবি থাকলে ছবি, না থাকলে নামের প্রথম অক্ষর দিয়ে অ্যাভাটার বানায় — এই কন্টেন্ট সবসময় একটা
+    সাইজ/শেপ-নির্ধারক wrapper-এর ভেতরে বসবে (যেমন .team-avatar, .tm-avatar-wrap), তাই এখানে
+    নিজে থেকে সাইজ/radius সেট করে না — শুধু wrapper পুরোটা fill করে। profile ও nav-chip
+    অ্যাভাটারেও app.js এই একই ফাংশন ব্যবহার করে, যাতে পুরো সাইটে avatar দেখতে একরকম হয়। */
+export function avatarOrLetter(url, name) {
+  return url
+    ? `<img class="avatar-img" src="${escapeHtml(url)}" alt="" loading="lazy">`
+    : `<div class="avatar-letter">${escapeHtml(initial(name))}</div>`;
+}
+
+export function emptyState(message, iconName = "inbox") {
+  return `<div class="empty-state"><div class="empty-state-icon">${icon(iconName)}</div><p>${escapeHtml(message)}</p></div>`;
+}
 
 export function renderServices(services) {
+  if (!services.length) return emptyState("এখনো কোনো সার্ভিস যোগ করা হয়নি।", "settings");
   return services
     .map(
       (s, i) => `
     <div class="service-card reveal">
       <span class="service-num">${String(i + 1).padStart(2, "0")}</span>
-      <div class="service-icon">${icons[s.icon] || icons.code}</div>
-      <h3>${s.title}</h3>
-      <p>${s.desc}</p>
+      <div class="service-icon">${icon(s.icon)}</div>
+      <h3>${escapeHtml(s.title)}</h3>
+      <p>${escapeHtml(s.desc)}</p>
     </div>`
     )
     .join("");
 }
 
 export function renderPortfolio(items) {
+  if (!items.length) return emptyState("এখনো কোনো পোর্টফোলিও আইটেম যোগ করা হয়নি।", "layout");
   return items
     .map(
       (p) => `
-    <div class="pf-card reveal" data-category="${p.category}">
+    <div class="pf-card reveal" data-category="${escapeHtml(p.category)}">
+      ${p.imageUrl
+        ? `<div class="pf-media"><img src="${escapeHtml(p.imageUrl)}" alt="" loading="lazy"></div>`
+        : ""}
       <div class="pf-top">
-        <span class="pf-tag">${p.tag}</span>
+        <span class="pf-tag">${escapeHtml(p.tag)}</span>
       </div>
-      <h3>${p.title}</h3>
-      <p>${p.desc}</p>
-      <div class="pf-meta">${p.stack}</div>
+      <h3>${escapeHtml(p.title)}</h3>
+      <p>${escapeHtml(p.desc)}</p>
+      <div class="pf-meta">${escapeHtml(p.stack)}</div>
     </div>`
     )
     .join("");
 }
 
 export function renderCaseStudies(cases) {
+  if (!cases.length) return "";
   return cases
     .map(
       (c) => `
     <div class="case-row reveal">
       <div>
-        <h4>${c.title}</h4>
-        <p>${c.desc}</p>
+        <h4>${escapeHtml(c.title)}</h4>
+        <p>${escapeHtml(c.desc)}</p>
       </div>
-      <div class="case-metric"><b>${c.metric1.value}</b><span>${c.metric1.label}</span></div>
-      <div class="case-metric"><b>${c.metric2.value}</b><span>${c.metric2.label}</span></div>
+      <div class="case-metric"><b>${escapeHtml(c.metric1Value)}</b><span>${escapeHtml(c.metric1Label)}</span></div>
+      <div class="case-metric"><b>${escapeHtml(c.metric2Value)}</b><span>${escapeHtml(c.metric2Label)}</span></div>
     </div>`
     )
     .join("");
 }
 
 export function renderStats(stats) {
+  if (!stats.length) return "";
   return stats
     .map(
       (s) => `
     <div class="stat-cell reveal">
-      <b data-count="${s.value}" data-suffix="${s.suffix}">0${s.suffix}</b>
-      <span>${s.label}</span>
+      <b data-count="${Number(s.value) || 0}" data-suffix="${escapeHtml(s.suffix)}">0${escapeHtml(s.suffix)}</b>
+      <span>${escapeHtml(s.label)}</span>
     </div>`
     )
     .join("");
 }
 
 export function renderTestimonials(list) {
+  if (!list.length) return "";
   return list
     .map(
       (t, i) => `
     <div class="tm-slide${i === 0 ? " active" : ""}" data-i="${i}">
-      <p class="tm-quote">“${t.quote}”</p>
-      <div class="tm-person"><b>${t.name}</b><span>${t.role}</span></div>
+      <div class="tm-avatar-wrap">${avatarOrLetter(t.avatarUrl, t.name)}</div>
+      <p class="tm-quote">“${escapeHtml(t.quote)}”</p>
+      <div class="tm-person"><b>${escapeHtml(t.name)}</b><span>${escapeHtml(t.role)}</span></div>
     </div>`
     )
     .join("");
@@ -90,27 +111,30 @@ export function renderTestimonialDots(list) {
 }
 
 export function renderTeam(team) {
+  if (!team.length) return emptyState("এখনো কোনো টিম মেম্বার যোগ করা হয়নি।", "users");
   return team
     .map(
       (m) => `
     <div class="team-card reveal">
-      <div class="team-avatar">${m.name.charAt(0)}</div>
-      <h4>${m.name}</h4>
-      <span>${m.role}</span>
+      <div class="team-avatar">${avatarOrLetter(m.avatarUrl, m.name)}</div>
+      <h4>${escapeHtml(m.name)}</h4>
+      <span>${escapeHtml(m.role)}</span>
     </div>`
     )
     .join("");
 }
 
 export function renderPricing(plans) {
+  if (!plans.length) return emptyState("এখনো কোনো প্যাকেজ যোগ করা হয়নি।", "target");
   return plans
     .map(
       (p) => `
     <div class="price-card reveal${p.featured ? " featured" : ""}">
-      <span class="price-plan">${p.name}</span>
-      <div class="price-amount">${p.price}</div>
+      ${p.featured ? `<span class="price-badge">জনপ্রিয়</span>` : ""}
+      <span class="price-plan">${escapeHtml(p.name)}</span>
+      <div class="price-amount">${escapeHtml(p.price)}</div>
       <ul class="price-feat">
-        ${p.features.map((f) => `<li>${icons.check}<span>${f}</span></li>`).join("")}
+        ${(p.features || []).map((f) => `<li>${icons.check}<span>${escapeHtml(f)}</span></li>`).join("")}
       </ul>
       <button class="btn ${p.featured ? "btn-primary" : "btn-outline"} btn-block" data-open-booking>কোট চান</button>
     </div>`
@@ -119,12 +143,13 @@ export function renderPricing(plans) {
 }
 
 export function renderFAQ(items) {
+  if (!items.length) return emptyState("এখনো কোনো প্রশ্নোত্তর যোগ করা হয়নি।", "message");
   return items
     .map(
       (f, i) => `
     <div class="faq-item reveal" data-i="${i}">
-      <button class="faq-q">${f.q}${icons.plus}</button>
-      <div class="faq-a"><p>${f.a}</p></div>
+      <button class="faq-q">${escapeHtml(f.q)}${icons.plus}</button>
+      <div class="faq-a"><p>${escapeHtml(f.a)}</p></div>
     </div>`
     )
     .join("");
