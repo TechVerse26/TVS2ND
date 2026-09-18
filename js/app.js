@@ -432,9 +432,9 @@ async function renderProfileView() {
     const done = bookings.filter((b) => b.status === "সম্পন্ন").length;
     const active = bookings.length - done - bookings.filter((b) => b.status === "বাতিল").length;
     statsEl.innerHTML = `
-      <div class="profile-stat"><b>${bookings.length}</b><span>মোট অনুরোধ</span></div>
-      <div class="profile-stat"><b>${active}</b><span>চলমান</span></div>
-      <div class="profile-stat"><b>${done}</b><span>সম্পন্ন</span></div>`;
+      <div class="profile-stat"><div class="profile-stat-icon ps-total">${icons.inbox}</div><b>${bookings.length}</b><span>মোট অনুরোধ</span></div>
+      <div class="profile-stat"><div class="profile-stat-icon ps-active">${icons.bolt}</div><b>${active}</b><span>চলমান</span></div>
+      <div class="profile-stat"><div class="profile-stat-icon ps-done">${icons.check}</div><b>${done}</b><span>সম্পন্ন</span></div>`;
 
     if (bookings.length === 0) {
       list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${icons.inbox}</div><p>এখনো কোনো অনুরোধ পাঠানো হয়নি।</p><button type="button" class="btn btn-primary btn-sm" id="profileStartBtn">প্রজেক্ট শুরু করুন</button></div>`;
@@ -444,8 +444,11 @@ async function renderProfileView() {
       });
     } else {
       list.innerHTML = bookings.map((b) => `
-        <div class="booking-card">
-          <div class="booking-card-top"><b>${escapeHtml(b.service || "—")}</b><span class="status-badge ${statusClass(b.status)}">${escapeHtml(b.status || "নতুন")}</span></div>
+        <div class="booking-card ${statusClass(b.status)}">
+          <div class="booking-card-top">
+            <div class="booking-card-title"><span class="booking-card-icon">${icons.layout}</span><b>${escapeHtml(b.service || "—")}</b></div>
+            <span class="status-badge ${statusClass(b.status)}">${escapeHtml(b.status || "নতুন")}</span>
+          </div>
           <div class="booking-meta"><span>${formatDate(b.createdAt)}</span>${b.budget ? `<span>${escapeHtml(b.budget)}</span>` : ""}</div>
         </div>`).join("");
     }
