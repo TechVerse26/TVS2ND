@@ -451,7 +451,17 @@ async function renderProfileView() {
     }
   } catch (err) {
     console.error(err);
-    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${icons.warn}</div><p>বুকিং হিস্টরি লোড করা যায়নি।</p></div>`;
+    // ফোনে DevTools/Console খোলা কঠিন, তাই এরর কোডটা সরাসরি স্ক্রিনেই দেখানো হচ্ছে —
+    // এতে কনসোল না খুলেই বোঝা যাবে সমস্যাটা rules-এ নাকি ইনডেক্সে।
+    let detail = "";
+    if (err?.code === "permission-denied") {
+      detail = "কারণ: Firestore Rules এখনো Publish করা হয়নি বা rules ভুল আছে (permission-denied)।";
+    } else if (err?.code === "failed-precondition") {
+      detail = "কারণ: প্রয়োজনীয় Firestore ইনডেক্স এখনো তৈরি হয়নি (failed-precondition)। Firebase Console → Firestore Database → Indexes ট্যাবে গিয়ে তৈরি করুন।";
+    } else if (err?.code) {
+      detail = `এরর কোড: ${err.code}`;
+    }
+    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${icons.warn}</div><p>বুকিং হিস্টরি লোড করা যায়নি।</p>${detail ? `<p class="mono-sm muted" style="margin-top:-6px;">${escapeHtml(detail)}</p>` : ""}</div>`;
   }
 }
 
