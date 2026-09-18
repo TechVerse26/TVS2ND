@@ -1,15 +1,19 @@
 // sw.js — বেসিক অফলাইন সাপোর্ট (app shell cache)
-const CACHE_NAME = "techverse-shell-v1";
+const CACHE_NAME = "techverse-shell-v2";
 const SHELL_FILES = [
   "./",
   "./index.html",
   "./css/styles.css",
   "./js/app.js",
-  "./js/data.js",
+  "./js/content.js",
+  "./js/icons.js",
+  "./js/utils.js",
   "./js/templates.js",
   "./js/router.js",
   "./js/animations.js",
   "./js/toast.js",
+  "./js/auth.js",
+  "./js/firebase-config.js",
   "./manifest.json"
 ];
 

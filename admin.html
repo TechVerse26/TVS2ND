@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="bn" data-theme="">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>অ্যাডমিন প্যানেল — Tech Verse</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2220%22 fill=%22%2335D0A0%22/><text x=%2250%22 y=%2268%22 font-size=%2255%22 font-family=%22monospace%22 font-weight=%22700%22 text-anchor=%22middle%22 fill=%22%2306261D%22>TV</text></svg>">
+<link rel="stylesheet" href="./css/styles.css">
+<link rel="stylesheet" href="./css/admin.css">
+</head>
+<body class="admin-body">
+
+<div id="app">
+  <div class="admin-gate">
+    <div class="admin-gate-box">
+      <div class="empty-state-icon skel" style="border:none;"></div>
+      <h2>লোড হচ্ছে...</h2>
+      <p>অ্যাক্সেস যাচাই করা হচ্ছে।</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var saved = localStorage.getItem("tv-theme");
+    if (saved) document.documentElement.setAttribute("data-theme", saved);
+  })();
+</script>
+<script type="module" src="./js/admin.js"></script>
+</body>
+</html>
