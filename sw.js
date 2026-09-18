@@ -1,5 +1,5 @@
 // sw.js — বেসিক অফলাইন সাপোর্ট (app shell cache)
-const CACHE_NAME = "techverse-shell-v2";
+const CACHE_NAME = "techverse-shell-v3";
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -14,7 +14,8 @@ const SHELL_FILES = [
   "./js/toast.js",
   "./js/auth.js",
   "./js/firebase-config.js",
-  "./manifest.json"
+  "./manifest.json",
+  "./assets/logo.png"
 ];
 
 self.addEventListener("install", (event) => {
