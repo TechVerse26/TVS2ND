@@ -12,7 +12,7 @@
 
 import { db } from "./firebase-config.js";
 import {
-  collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, setDoc, deleteField,
+  collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, setDoc,
   query, orderBy, limit, where, getCountFromServer, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { watchAuthState, logout, getUserProfile, isAdminProfile } from "./auth.js";
@@ -558,22 +558,22 @@ async function renderUsers(page) {
   bindUserEvents(list);
 }
 
-function roleActionLabel(role) {
-  return role === "admin" ? "অ্যাডমিন বাদ দিন" : "অ্যাডমিন করুন";
+function roleActionLabel(isAdmin) {
+  return isAdmin ? "অ্যাডমিন বাদ দিন" : "অ্যাডমিন করুন";
 }
 function userTableHtml(list) {
   const rows = list.map((u) => `
     <tr>
       <td><div class="cell-title">${escapeHtml(u.name || "নাম নেই")}</div><div class="cell-muted">${escapeHtml(u.email || "")}</div></td>
       <td class="cell-muted">${escapeHtml(u.phone || "—")}</td>
-      <td>${u.role === "admin" ? `<span class="role-badge">অ্যাডমিন</span>` : `<span class="cat-badge">সাধারণ ইউজার</span>`}</td>
-      <td class="cell-actions"><button class="btn ${u.role === "admin" ? "btn-danger-ghost" : "btn-outline"} btn-sm" data-toggle="${u.id}">${roleActionLabel(u.role)}</button></td>
+      <td>${u.isAdmin === true ? `<span class="role-badge">অ্যাডমিন</span>` : `<span class="cat-badge">সাধারণ ইউজার</span>`}</td>
+      <td class="cell-actions"><button class="btn ${u.isAdmin === true ? "btn-danger-ghost" : "btn-outline"} btn-sm" data-toggle="${u.id}">${roleActionLabel(u.isAdmin === true)}</button></td>
     </tr>`).join("");
   const cards = list.map((u) => `
     <div class="admin-list-card">
-      <div class="admin-list-card-top"><b>${escapeHtml(u.name || "নাম নেই")}</b>${u.role === "admin" ? `<span class="role-badge">অ্যাডমিন</span>` : ""}</div>
+      <div class="admin-list-card-top"><b>${escapeHtml(u.name || "নাম নেই")}</b>${u.isAdmin === true ? `<span class="role-badge">অ্যাডমিন</span>` : ""}</div>
       <p>${escapeHtml(u.email || "")}${u.phone ? " · " + escapeHtml(u.phone) : ""}</p>
-      <button class="btn ${u.role === "admin" ? "btn-danger-ghost" : "btn-outline"} btn-sm" data-toggle="${u.id}">${roleActionLabel(u.role)}</button>
+      <button class="btn ${u.isAdmin === true ? "btn-danger-ghost" : "btn-outline"} btn-sm" data-toggle="${u.id}">${roleActionLabel(u.isAdmin === true)}</button>
     </div>`).join("");
   return `<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>ইউজার</th><th>ফোন</th><th>রোল</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="admin-mobile-list">${cards}</div>`;
@@ -585,20 +585,20 @@ function bindUserEvents(list) {
     if (!btn) return;
     const u = list.find((x) => x.id === btn.dataset.toggle);
     if (!u) return;
-    const makingAdmin = u.role !== "admin";
+    const makingAdmin = u.isAdmin !== true;
     const who = escapeHtml(u.name || u.email || "এই ইউজার");
     const selfNote = (u.id === currentUid && !makingAdmin) ? " এতে আপনার নিজের অ্যাডমিন এক্সেসও চলে যাবে।" : "";
     const msg = makingAdmin ? `"${who}"-কে অ্যাডমিন করতে চান?` : `"${who}"-এর অ্যাডমিন এক্সেস বাদ দিতে চান?${selfNote}`;
     confirmAction(msg, async () => {
       try {
-        await updateDoc(doc(db, "users", u.id), { role: makingAdmin ? "admin" : deleteField() });
+        await updateDoc(doc(db, "users", u.id), { isAdmin: makingAdmin });
         showToast("আপডেট হয়েছে।");
         renderUsers(document.getElementById("page"));
       } catch (err) {
         console.error(err);
         showToast("আপডেট করতে সমস্যা হয়েছে।", "error");
       }
-    }, roleActionLabel(u.role), !makingAdmin);
+    }, roleActionLabel(u.isAdmin === true), !makingAdmin);
   });
 }
 

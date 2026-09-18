@@ -42,7 +42,10 @@ export function friendlyAuthError(err) {
   return map[code] || "কিছু একটা সমস্যা হয়েছে, আবার চেষ্টা করুন।";
 }
 
-/** নতুন ইউজারের জন্য Firestore-এ প্রোফাইল ডকুমেন্ট তৈরি করে (না থাকলে) — role ইচ্ছাকৃতভাবে সেট করা হয় না */
+/** নতুন ইউজারের জন্য Firestore-এ প্রোফাইল ডকুমেন্ট তৈরি করে (না থাকলে) —
+    isAdmin: false স্পষ্টভাবে সেট করা হয়, কারণ users/{uid}-এর সিকিউরিটি রুল
+    create-এর সময় এই ফিল্ডটা false হিসেবে থাকা বাধ্যতামূলক করে রেখেছে
+    (অন্য কোর্স/এক্সাম সাইটের মতোই একই isAdmin বুলিয়ান স্কিম ব্যবহার করা হচ্ছে)। */
 async function ensureUserDoc(user) {
   const ref = doc(db, "users", user.uid);
   const snap = await getDoc(ref);
@@ -52,6 +55,7 @@ async function ensureUserDoc(user) {
       email: user.email || "",
       photoURL: user.photoURL || "",
       phone: "",
+      isAdmin: false,
       createdAt: serverTimestamp()
     });
   }
@@ -112,7 +116,7 @@ export function watchAuthState(callback) {
    আসল সুরক্ষা Firestore Security Rules-এ isAdmin() ফাংশনের মাধ্যমে — এখানে না। */
 
 export function isAdminProfile(profile) {
-  return !!profile && profile.role === "admin";
+  return !!profile && profile.isAdmin === true;
 }
 
 export async function checkIsAdmin(uid) {
