@@ -429,28 +429,49 @@ h1,h2,h3{ font-family: var(--font-display); font-weight:600; letter-spacing:-.01
 .profile-stat span{ font-size:.8rem; color: var(--text-faint); }
 
 .profile-grid{ display:grid; grid-template-columns: .85fr 1.4fr; gap:24px; margin-top:12px; padding-bottom:80px; align-items:start; }
+
+/* -- Account menu: navigation + sign out live together as one list.
+      Sign out is simply the last row, split off by a hairline and a
+      danger tint — never a separate floating button. -- */
+.profile-menu{
+  border:1px solid var(--border); border-radius: var(--radius-m);
+  padding:16px; background: var(--surface); position:sticky; top:96px;
+}
+.profile-menu-label{
+  display:block; font-family: var(--font-mono); font-size:.74rem;
+  color: var(--text-faint); padding:4px 10px 12px;
+}
+.profile-nav{ display:flex; flex-direction:column; gap:2px; }
+.profile-menu-item{
+  display:flex; align-items:center; gap:12px; width:100%;
+  padding:12px 12px; border-radius: var(--radius-s); border:1px solid transparent;
+  background:transparent; color: var(--text-muted); font-size:.9rem; cursor:pointer;
+  transition: background-color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+.profile-menu-item svg{ flex-shrink:0; opacity:.85; }
+.profile-menu-item:hover{ background: var(--surface-2); color: var(--text); }
+.profile-menu-item.active{ background: var(--surface-2); color: var(--text); border-color: var(--border); }
+.profile-menu-item.active svg{ color: var(--accent); opacity:1; }
+.profile-menu-item.admin-link{ color: var(--accent); }
+.profile-menu-item.admin-link svg{ color: var(--accent); opacity:1; }
+.profile-menu-item.admin-link:hover{ background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+.profile-menu-sep{ height:1px; background: var(--border); margin:8px 4px; }
+
+.profile-menu-item.is-danger{ color: var(--danger); }
+.profile-menu-item.is-danger svg{ opacity:1; }
+.profile-menu-item.is-danger:hover{ background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
+
 .profile-panel{ border:1px solid var(--border); border-radius: var(--radius-m); padding:26px; background: var(--surface); }
 .profile-main .profile-panel + .profile-panel{ margin-top:20px; }
-.profile-grid > aside.profile-panel{ position:sticky; top:96px; }
-.profile-panel > h3{ font-size:1rem; margin-bottom:18px; }
 .profile-panel-head{ margin-bottom:20px; }
 .profile-panel-head h3{ display:flex; align-items:center; gap:10px; font-size:1rem; }
 .profile-panel-head h3 svg{ color: var(--accent); flex-shrink:0; }
 
-.profile-nav{ display:flex; flex-direction:column; gap:2px; margin-bottom:16px; }
-.profile-nav a{
-  display:flex; align-items:center; gap:11px; padding:9px 10px; border-radius: var(--radius-s);
-  color: var(--text-muted); font-size:.9rem; border:1px solid transparent;
-  transition: background-color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
-}
-.profile-nav a svg{ flex-shrink:0; opacity:.85; }
-.profile-nav a:hover{ background: var(--surface-2); color: var(--text); }
-.profile-nav a.active{ background: var(--surface-2); color: var(--text); border-color: var(--border); }
-.profile-nav a.active svg{ color: var(--accent); opacity:1; }
-.profile-nav a.admin-link{ color: var(--accent); }
-.profile-nav a.admin-link svg{ color: var(--accent); opacity:1; }
-.profile-nav a.admin-link:hover{ background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.profile-logout{ display:flex; align-items:center; justify-content:center; gap:8px; }
+/* [hidden] must win over the component rules above — otherwise the
+   admin badge / admin-panel link render for every visitor, not just admins */
+#profileRoleBadge[hidden],
+#adminNavLink[hidden]{ display:none; }
 
 .booking-card{
   border:1px solid var(--border); border-left:3px solid var(--border-strong); border-radius: var(--radius-s);
@@ -533,7 +554,7 @@ h1,h2,h3{ font-family: var(--font-display); font-weight:600; letter-spacing:-.01
   .book-panel{ grid-template-columns:1fr; }
   .footer-grid{ grid-template-columns: 1fr 1fr; }
   .profile-grid{ grid-template-columns:1fr; }
-  .profile-grid > aside.profile-panel{ position:static; }
+  .profile-menu{ position:static; }
 }
 @media (max-width: 560px){
   .section{ padding:64px 0; }
