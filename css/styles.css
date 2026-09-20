@@ -45,6 +45,7 @@
   --mint-bg:#EBF7F3;   --mint-badge:#D2F2E5;   --mint-ink:#05704A;   --mint-line:#CBEADB;
   --violet-bg:#F1F0FE; --violet-badge:#E0DCFD; --violet-ink:#5B47C7; --violet-line:#DDD9F8;
   --slate-bg:#F3F6FB;  --slate-badge:#E1E7F3;  --slate-ink:#3E5478;  --slate-line:#DDE4F0;
+  --rose-bg:#FDEEF0;   --rose-badge:#FADCE0;   --rose-ink:#B52D44;   --rose-line:#F3D0D6;
 
   --font-display: 'Plus Jakarta Sans', 'Hind Siliguri', system-ui, sans-serif;
   --font-body: 'Plus Jakarta Sans', 'Hind Siliguri', system-ui, sans-serif;
@@ -96,6 +97,7 @@
   --mint-bg:#142B37;   --mint-badge:#1B4044;   --mint-ink:#4ADE9F;   --mint-line:#1D4848;
   --violet-bg:#1C2440; --violet-badge:#2D3157; --violet-ink:#A493FF; --violet-line:#33365F;
   --slate-bg:#1D273C;  --slate-badge:#2E394F;  --slate-ink:#A9B8D6;  --slate-line:#343F56;
+  --rose-bg:#252236;   --rose-badge:#3F2C40;   --rose-ink:#FF7A8E;   --rose-line:#493044;
 
   --shadow-1: 0 1px 2px rgba(0,0,0,.4);
   --shadow-2: 0 18px 40px -20px rgba(0,0,0,.7);
@@ -131,6 +133,7 @@
     --mint-bg:#142B37;   --mint-badge:#1B4044;   --mint-ink:#4ADE9F;   --mint-line:#1D4848;
     --violet-bg:#1C2440; --violet-badge:#2D3157; --violet-ink:#A493FF; --violet-line:#33365F;
     --slate-bg:#1D273C;  --slate-badge:#2E394F;  --slate-ink:#A9B8D6;  --slate-line:#343F56;
+    --rose-bg:#252236;   --rose-badge:#3F2C40;   --rose-ink:#FF7A8E;   --rose-line:#493044;
 
     --shadow-1: 0 1px 2px rgba(0,0,0,.4);
     --shadow-2: 0 18px 40px -20px rgba(0,0,0,.7);
@@ -143,6 +146,7 @@
 .tone-mint  { --t-bg:var(--mint-bg);   --t-badge:var(--mint-badge);   --t-ink:var(--mint-ink);   --t-line:var(--mint-line); }
 .tone-violet{ --t-bg:var(--violet-bg); --t-badge:var(--violet-badge); --t-ink:var(--violet-ink); --t-line:var(--violet-line); }
 .tone-slate { --t-bg:var(--slate-bg);  --t-badge:var(--slate-badge);  --t-ink:var(--slate-ink);  --t-line:var(--slate-line); }
+.tone-rose  { --t-bg:var(--rose-bg);   --t-badge:var(--rose-badge);   --t-ink:var(--rose-ink);   --t-line:var(--rose-line); }
 
 /* ---------- Reset ---------- */
 *,*::before,*::after{ box-sizing: border-box; }
@@ -277,10 +281,9 @@ h1,h2,h3{ font-family: var(--font-display); font-weight: 700; letter-spacing: 0;
 .avatar-letter{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:700; }
 .chip-avatar-wrap{ width:34px; height:34px; border-radius:50%; overflow:hidden; background: var(--blue-badge); color: var(--blue-ink); font-size:.85rem; flex-shrink:0; }
 
-/* ---------- Brand (shared with the footer — keep these three rules as they are) ---------- */
+/* ---------- Brand (নেভ ও ফুটার দুই জায়গাতেই) ---------- */
 .brand{ display:flex; align-items:center; gap:10px; font-family: var(--font-display); font-weight:700; font-size:1.15rem; }
 .brand-logo{ height:28px; width:auto; display:block; }
-.footer-brand .brand-logo{ height:32px; }
 
 /* ---------- Nav ---------- */
 .nav{
@@ -596,54 +599,6 @@ h1,h2,h3{ font-family: var(--font-display); font-weight: 700; letter-spacing: 0;
 }
 .wa-tooltip.show{ opacity:1; }
 
-/* =========================================================
-   FOOTER — intentionally left exactly as it was.
-   The redesign does not touch the footer's markup or its rules
-   (the block below is the original, byte for byte). The tokens
-   and inherited text settings the footer reads are pinned here,
-   so palette / font / line-height changes elsewhere can never
-   leak into it — it renders the same in light and dark.
-   ========================================================= */
-.footer{
-  --border: #E2E6ED;
-  --text: #12151C;
-  --text-muted: #4E5768;
-  --text-faint: #8B93A3;
-  --accent: #35D0A0;
-  --font-body: 'Inter', 'Hind Siliguri', system-ui, sans-serif;
-  --font-display: 'Space Grotesk', 'Hind Siliguri', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Hind Siliguri', monospace;
-  font-family: var(--font-body);
-  font-size: 16px;
-  line-height: 1.6;
-  color: var(--text);
-}
-:root[data-theme="dark"] .footer{
-  --border: #262E3D;
-  --text: #E9ECF2;
-  --text-muted: #96A0B5;
-  --text-faint: #5E687C;
-}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]) .footer{
-    --border: #262E3D;
-    --text: #E9ECF2;
-    --text-muted: #96A0B5;
-    --text-faint: #5E687C;
-  }
-}
-.footer a:focus-visible{ border-radius: 3px; }
-
-/* ---------- Footer ---------- */
-.footer{ border-top:1px solid var(--border); padding:56px 0 32px; }
-.footer-grid{ display:grid; grid-template-columns: 1.4fr repeat(3,1fr); gap:36px; margin-bottom:44px; }
-.footer-brand p{ color: var(--text-muted); font-size:.9rem; margin-top:14px; max-width:280px; }
-.footer h5{ font-family: var(--font-mono); font-size:.78rem; color: var(--text-faint); margin-bottom:16px; text-transform: none; }
-.footer-links{ display:flex; flex-direction:column; gap:10px; }
-.footer-links a{ font-size:.88rem; color: var(--text-muted); }
-.footer-links a:hover{ color: var(--accent); }
-.footer-bottom{ display:flex; justify-content:space-between; align-items:center; padding-top:24px; border-top:1px solid var(--border); font-size:.8rem; color: var(--text-faint); flex-wrap:wrap; gap:12px; }
-
 /* ---------- Responsive ---------- */
 @media (max-width: 980px){
   .hero-grid{ grid-template-columns:1fr; gap:44px; }
@@ -658,7 +613,6 @@ h1,h2,h3{ font-family: var(--font-display); font-weight: 700; letter-spacing: 0;
   .pricing-grid{ grid-template-columns: 1fr; }
   .book-panel{ grid-template-columns:1fr; }
   .book-aside{ border-right:none; border-bottom:1px solid var(--blue-line); }
-  .footer-grid{ grid-template-columns: 1fr 1fr; }
 }
 @media (max-width: 900px){
   .nav-links{ display:none; }
@@ -675,7 +629,6 @@ h1,h2,h3{ font-family: var(--font-display); font-weight: 700; letter-spacing: 0;
   .team-grid{ grid-template-columns: 1fr 1fr; gap:12px; }
   .team-card{ padding:10px 10px 14px; }
   .field-row{ grid-template-columns:1fr; }
-  .footer-grid{ grid-template-columns: 1fr; }
   .hero-facts{ gap:8px; margin-top:32px; }
   .fact{ padding:12px; }
   .nav .wrap{ height:64px; }

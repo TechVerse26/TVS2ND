@@ -1,0 +1,209 @@
+/* =========================================================
+   Tech Verse — Footer (Quick Links + Contact Us) ও তথ্য-শিট
+   ফুটারের কনটেন্ট js/footer.js আর js/contact.js থেকে আসে — অ্যাডমিন প্যানেল থেকে নয়, তাই অফলাইনেও
+   ঠিকঠাক দেখায়। Quick Links চাপলে js/info.js-এর শিট (About / Privacy / Terms / Help / Credits) খোলে।
+   রঙ ও ফন্ট সবই css/styles.css-এর টোকেন থেকে — লাইট/ডার্ক নিজে থেকে মেলে।
+   ========================================================= */
+
+/* ---------- Footer ---------- */
+.footer{ border-top:1px solid var(--border); padding:68px 0 38px; }
+.footer-grid{ display:grid; grid-template-columns: 1.1fr .85fr 1.45fr; gap:52px; align-items:start; }
+
+.footer-brand .brand-logo{ height:32px; }
+.footer-brand p{ color:var(--text-muted); font-size:.96rem; margin:16px 0 22px; max-width:330px; }
+.footer-social{ display:flex; gap:12px; }
+.social-btn{
+  width:46px; height:46px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  background:var(--surface); border:1.5px solid var(--border-strong); color:var(--text-muted);
+  transition: color var(--dur-1) var(--ease), border-color var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease);
+}
+.social-btn svg{ width:20px; height:20px; }
+.social-btn:hover{ color:var(--accent); border-color:var(--accent); background:var(--accent-soft); }
+
+.footer-title{ font-family:var(--font-display); font-size:1.15rem; font-weight:700; line-height:1.4; margin-bottom:14px; }
+
+.footer-links{ display:flex; flex-direction:column; max-width:360px; }
+.footer-links a{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:48px; padding:0 2px;
+  border-bottom:1px solid var(--border); color:var(--text-muted); font-weight:500; font-size:.98rem;
+  transition: color var(--dur-1) var(--ease), padding var(--dur-1) var(--ease);
+}
+.footer-links li:last-child a{ border-bottom:none; }
+.footer-links a svg{ width:16px; height:16px; flex-shrink:0; opacity:.55; transition: transform var(--dur-1) var(--ease), opacity var(--dur-1) var(--ease); }
+.footer-links a:hover{ color:var(--accent); padding-left:6px; }
+.footer-links a:hover svg{ opacity:1; transform: translateX(2px); }
+
+/* Contact Us — একটা গোল-কোণার কার্ডে সারি সারি; প্রতিটার নিজস্ব রঙের আইকন-ডিস্ক */
+.contact-list{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-l); overflow:hidden; }
+.contact-item{ display:flex; align-items:center; border-top:1px solid var(--border); }
+.contact-item:first-child{ border-top:none; }
+.contact-link{
+  flex:1; min-width:0; display:flex; align-items:center; gap:14px; padding:12px 10px 12px 14px;
+  transition: background-color var(--dur-1) var(--ease);
+}
+.contact-link:hover{ background:var(--t-bg); }
+.contact-ico{ width:42px; height:42px; border-radius:50%; background:var(--t-badge); color:var(--t-ink); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.contact-ico svg{ width:19px; height:19px; }
+.contact-txt{ min-width:0; display:flex; flex-direction:column; }
+.contact-txt b{ font-size:.98rem; font-weight:600; line-height:1.45; overflow-wrap:anywhere; }
+.contact-txt b.addr{ font-size:.9rem; overflow-wrap:break-word; }
+.contact-txt small{ color:var(--text-faint); font-size:.8rem; line-height:1.45; overflow-wrap:anywhere; }
+.contact-go{ margin-left:auto; width:16px; height:16px; color:var(--text-faint); flex-shrink:0; }
+.contact-link:hover .contact-go{ color:var(--t-ink); }
+.contact-copy{
+  flex-shrink:0; width:38px; height:38px; margin-right:8px; border:none; border-radius:12px; background:transparent;
+  color:var(--text-faint); display:flex; align-items:center; justify-content:center; cursor:pointer;
+  transition: background-color var(--dur-1) var(--ease), color var(--dur-1) var(--ease);
+}
+.contact-copy svg{ width:18px; height:18px; }
+.contact-copy:hover{ background:var(--t-badge); color:var(--t-ink); }
+
+.footer-bottom{
+  margin-top:52px; padding-top:22px; border-top:1px solid var(--border);
+  display:flex; justify-content:space-between; align-items:center; gap:10px 20px; flex-wrap:wrap;
+  color:var(--text-faint); font-size:.86rem;
+}
+
+@media (max-width: 1340px){
+  .footer-bottom{ padding-right:72px; }
+}
+@media (max-width: 980px){
+  .footer-grid{ grid-template-columns: 1fr 1.25fr; gap:44px 40px; }
+  .footer-brand{ grid-column: 1 / -1; }
+}
+@media (max-width: 720px){
+  .footer{ padding:52px 0 34px; }
+  .footer-grid{ grid-template-columns: 1fr; gap:38px; }
+  .footer-links{ max-width:none; }
+  .footer-bottom{ margin-top:40px; padding-right:0; justify-content:center; text-align:center; }
+}
+@media (max-width: 400px){
+  .contact-txt b.addr{ font-size:.84rem; }
+  .contact-link{ gap:12px; }
+}
+@media (max-width: 560px){
+  /* ফ্লোট WhatsApp বাটনের নিচে যাতে কপিরাইট লেখা ঢাকা না পড়ে */
+  .footer{ padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+}
+
+/* =========================================================
+   Info sheet — About / Privacy / Terms / Help / Credits
+   ডেস্কটপে মাঝখানের কার্ড, ফোনে নিচ থেকে ওঠা শিট। URL-এ #privacy ইত্যাদি বসে (শেয়ার করা যায়)।
+   ========================================================= */
+.info-overlay{
+  position:fixed; inset:0; z-index:210; background:var(--scrim);
+  display:flex; align-items:center; justify-content:center; padding:24px;
+  opacity:0; visibility:hidden;
+  transition: opacity .28s var(--ease), visibility 0s .28s;
+}
+.info-overlay.open{ opacity:1; visibility:visible; transition-delay:0s; }
+
+.info-sheet{
+  width:100%; max-width:800px; max-height:min(88vh, 880px); display:flex; flex-direction:column;
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--radius-xl); overflow:hidden;
+  transform: translateY(16px); transition: transform .32s var(--ease);
+}
+.info-overlay.open .info-sheet{ transform:none; }
+
+.info-head{ flex-shrink:0; display:flex; align-items:center; gap:14px; padding:18px 20px; background:var(--surface); border-bottom:1px solid var(--border); }
+.info-ico{ width:46px; height:46px; border-radius:50%; background:var(--t-badge); color:var(--t-ink); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.info-ico svg{ width:22px; height:22px; }
+.info-titles{ flex:1; min-width:0; }
+.info-titles h2{ font-size:1.3rem; font-weight:800; line-height:1.3; }
+.info-titles h2:focus{ outline:none; }
+.info-titles p{ color:var(--text-muted); font-size:.86rem; line-height:1.4; }
+.info-close{ flex-shrink:0; width:42px; height:42px; border:none; border-radius:14px; background:var(--surface-2); color:var(--text-muted); display:flex; align-items:center; justify-content:center; cursor:pointer; transition: color var(--dur-1) var(--ease); }
+.info-close:hover{ color:var(--text); }
+.info-close svg{ width:20px; height:20px; }
+
+.info-body{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:24px 26px calc(30px + env(safe-area-inset-bottom)); }
+.info-lead{ font-size:1.05rem; color:var(--text-muted); max-width:62ch; }
+.info-meta{
+  display:inline-flex; align-items:center; gap:8px; margin:16px 0 4px; padding:5px 13px; border-radius:999px;
+  background:var(--slate-bg); border:1px solid var(--slate-line); color:var(--slate-ink); font-size:.8rem; font-weight:600;
+}
+.info-meta svg{ width:14px; height:14px; }
+
+.info-sec{ padding:22px 0 4px; }
+.info-sec + .info-sec{ margin-top:22px; border-top:1px solid var(--border); }
+.info-sec h3{ display:flex; align-items:center; gap:12px; font-size:1.1rem; line-height:1.45; margin-bottom:12px; }
+.info-sec h3 .n{ width:30px; height:30px; border-radius:50%; background:var(--blue-badge); color:var(--blue-ink); display:flex; align-items:center; justify-content:center; font-size:.86rem; font-weight:800; flex-shrink:0; }
+.info-sec p{ color:var(--text-muted); font-size:.96rem; max-width:64ch; }
+.info-sec p + p{ margin-top:8px; }
+.info-list{ display:grid; gap:10px; margin-top:4px; }
+.info-list li{ position:relative; padding-left:22px; color:var(--text-muted); font-size:.96rem; max-width:64ch; }
+.info-list li::before{ content:''; position:absolute; left:5px; top:.72em; width:6px; height:6px; border-radius:50%; background:var(--accent); }
+.info-list + p{ margin-top:14px; }
+.info-list li b, .info-sec p b, .info-lead b{ color:var(--text); font-weight:700; }
+.info-link{ color:var(--accent); font-weight:600; text-decoration:underline; text-underline-offset:3px; text-decoration-thickness:1px; }
+.info-note{ margin-top:16px; padding:14px 16px; border-radius:16px; background:var(--blue-bg); border:1px solid var(--blue-line); color:var(--text-muted); font-size:.92rem; }
+.info-note b{ color:var(--text); }
+
+/* ধাপ (About: কীভাবে কাজ করি) — ক্রম গুরুত্বপূর্ণ, তাই নম্বর */
+.info-steps{ display:grid; gap:12px; counter-reset:step; }
+.info-steps li{ counter-increment:step; display:flex; gap:14px; align-items:flex-start; color:var(--text-muted); font-size:.96rem; }
+.info-steps li::before{
+  content:counter(step, bengali); flex-shrink:0; width:32px; height:32px; border-radius:50%;
+  background:var(--accent); color:var(--accent-ink); display:flex; align-items:center; justify-content:center; font-size:.9rem; font-weight:800;
+}
+.info-steps li b{ color:var(--text); }
+
+/* কার্ড (About: আমরা কী করি) */
+.info-cards{ display:grid; grid-template-columns: repeat(2, 1fr); gap:12px; }
+.info-card{ padding:16px; border-radius:20px; background:var(--t-bg); border:1px solid var(--t-line); }
+.info-card .ico{ width:40px; height:40px; border-radius:50%; background:var(--t-badge); color:var(--t-ink); display:flex; align-items:center; justify-content:center; margin-bottom:12px; }
+.info-card .ico svg{ width:20px; height:20px; }
+.info-card b{ display:block; font-size:.98rem; line-height:1.45; }
+.info-card span{ display:block; color:var(--text-muted); font-size:.88rem; line-height:1.6; margin-top:2px; }
+
+/* যোগাযোগের অ্যাকশন (Call / WhatsApp / Email) */
+.info-actions{ display:grid; grid-template-columns: minmax(0,.9fr) minmax(0,.9fr) minmax(0,1.5fr); gap:12px; margin-top:6px; }
+.info-action{ display:flex; align-items:center; gap:12px; padding:14px; border-radius:20px; background:var(--t-bg); border:1px solid var(--t-line); color:var(--text); min-width:0; transition: border-color var(--dur-1) var(--ease); }
+.info-action:hover{ border-color:var(--t-ink); }
+.info-action .ico{ width:42px; height:42px; border-radius:50%; background:var(--t-badge); color:var(--t-ink); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.info-action .ico svg{ width:20px; height:20px; }
+.info-action .txt{ min-width:0; display:flex; flex-direction:column; }
+.info-action b{ font-size:.96rem; line-height:1.4; }
+.info-action small{ color:var(--text-muted); font-size:.8rem; line-height:1.4; overflow-wrap:anywhere; }
+
+/* Help: প্রশ্ন-উত্তর (নেটিভ <details>) */
+.info-q{ background:var(--surface); border:1px solid var(--border); border-radius:18px; }
+.info-q + .info-q{ margin-top:10px; }
+.info-q summary{ list-style:none; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:14px; padding:15px 16px 15px 18px; font-weight:600; font-size:.98rem; line-height:1.5; border-radius:18px; }
+.info-q summary::-webkit-details-marker{ display:none; }
+.info-q summary svg{ width:18px; height:18px; flex-shrink:0; color:var(--accent); transition: transform var(--dur-2) var(--ease); }
+.info-q[open] summary svg{ transform: rotate(90deg); }
+.info-q .ans{ padding:0 18px 16px; color:var(--text-muted); font-size:.94rem; }
+.info-q .ans p{ max-width:none; }
+.info-q .ans .btn{ margin-top:12px; }
+
+/* Credits */
+.info-credit{ display:flex; align-items:flex-start; gap:14px; padding:14px 0; border-top:1px solid var(--border); }
+.info-credit:first-child{ border-top:none; }
+.info-credit .ico{ width:42px; height:42px; border-radius:50%; background:var(--t-badge); color:var(--t-ink); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.info-credit .ico svg{ width:20px; height:20px; }
+.info-credit .txt{ min-width:0; flex:1; }
+.info-credit .txt > b{ display:block; font-size:.98rem; line-height:1.5; }
+.info-credit span.d{ display:block; color:var(--text-muted); font-size:.9rem; line-height:1.6; }
+.info-credit span.d b{ color:var(--text); font-weight:700; }
+.info-pills{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+.info-pill{ padding:3px 11px; border-radius:999px; background:var(--slate-bg); border:1px solid var(--slate-line); color:var(--slate-ink); font-size:.76rem; font-weight:700; }
+
+/* শিটের নিচে: অন্য পাতায় যাওয়ার চিপ */
+.info-more{ margin-top:30px; padding-top:22px; border-top:1px solid var(--border); }
+.info-more > span{ display:block; font-size:.84rem; font-weight:700; color:var(--text-faint); margin-bottom:10px; }
+.info-more-row{ display:flex; flex-wrap:wrap; gap:8px; }
+.info-more .chip{ display:inline-flex; align-items:center; min-height:38px; padding:8px 16px; }
+
+@media (max-width: 720px){
+  .info-actions{ grid-template-columns: 1fr; }
+  .info-cards{ grid-template-columns: 1fr; gap:10px; }
+  .info-card{ display:grid; grid-template-columns:40px 1fr; column-gap:14px; align-items:start; padding:14px 16px; }
+  .info-card .ico{ grid-row: 1 / span 2; margin-bottom:0; }
+}
+@media (max-width: 640px){
+  .info-overlay{ align-items:flex-end; padding:0; }
+  .info-sheet{ max-width:none; max-height:94vh; max-height:94dvh; border-radius:var(--radius-xl) var(--radius-xl) 0 0; transform: translateY(44px); }
+  .info-head{ padding:16px 16px 14px 18px; }
+  .info-body{ padding:20px 18px calc(28px + env(safe-area-inset-bottom)); }
+}
