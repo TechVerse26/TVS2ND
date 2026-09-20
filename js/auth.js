@@ -37,7 +37,10 @@ export function friendlyAuthError(err) {
     "auth/invalid-credential": "ইমেইল অথবা পাসওয়ার্ড সঠিক নয়।",
     "auth/too-many-requests": "অনেকবার চেষ্টা করা হয়েছে। কিছুক্ষণ পর আবার চেষ্টা করুন।",
     "auth/popup-closed-by-user": "লগইন উইন্ডোটি বন্ধ হয়ে গেছে, আবার চেষ্টা করুন।",
-    "auth/account-exists-with-different-credential": "এই ইমেইলটি অন্য একটি লগইন পদ্ধতিতে ইতিমধ্যে ব্যবহৃত হয়েছে।"
+    "auth/account-exists-with-different-credential": "এই ইমেইলটি অন্য একটি লগইন পদ্ধতিতে ইতিমধ্যে ব্যবহৃত হয়েছে।",
+    "auth/network-request-failed": "ইন্টারনেট সংযোগে সমস্যা হচ্ছে, সংযোগ দেখে আবার চেষ্টা করুন।",
+    "auth/popup-blocked": "ব্রাউজার লগইন পপআপ আটকে দিয়েছে — পপআপ অনুমতি দিয়ে আবার চেষ্টা করুন।",
+    "auth/cancelled-popup-request": "লগইন উইন্ডোটি বন্ধ হয়ে গেছে, আবার চেষ্টা করুন।"
   };
   return map[code] || "কিছু একটা সমস্যা হয়েছে, আবার চেষ্টা করুন।";
 }
@@ -46,7 +49,7 @@ export function friendlyAuthError(err) {
     isAdmin: false স্পষ্টভাবে সেট করা হয়, কারণ users/{uid}-এর সিকিউরিটি রুল
     create-এর সময় এই ফিল্ডটা false হিসেবে থাকা বাধ্যতামূলক করে রেখেছে
     (অন্য কোর্স/এক্সাম সাইটের মতোই একই isAdmin বুলিয়ান স্কিম ব্যবহার করা হচ্ছে)। */
-async function ensureUserDoc(user) {
+export async function ensureUserDoc(user) {
   const ref = doc(db, "users", user.uid);
   const snap = await getDoc(ref);
   if (!snap.exists()) {
@@ -89,6 +92,12 @@ export async function loginWithGithub() {
 
 export async function resetPassword(email) {
   await sendPasswordResetEmail(auth, email);
+}
+
+/** বর্তমান ইউজারের ইমেইলে যাচাইকরণ লিংক পাঠায় (অ্যাকাউন্ট সেটিং থেকে ব্যবহৃত) */
+export async function sendVerification() {
+  if (!auth.currentUser) throw new Error("not-signed-in");
+  await sendEmailVerification(auth.currentUser);
 }
 
 export async function logout() {

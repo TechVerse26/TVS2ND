@@ -58,3 +58,41 @@ export const BOOKING_STATUSES = [
 export function statusClass(status) {
   return (BOOKING_STATUSES.find((s) => s.value === status) || BOOKING_STATUSES[0]).cls;
 }
+
+/** শুধু তারিখ (সময় ছাড়া) — "সদস্য হয়েছেন" ধরনের লাইনের জন্য */
+export function formatDay(value) {
+  if (!value) return "—";
+  const d = typeof value.toDate === "function" ? value.toDate() : new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("bn-BD", { year: "numeric", month: "long", day: "numeric" });
+}
+
+/** সেটিংস (Firestore) থেকে আসা লিংক বসানোর আগে যাচাই — শুধু http/https চলবে,
+    যাতে javascript: ধরনের লিংক কখনো href-এ না বসে। ভুল/খালি হলে "" ফেরত দেয়। */
+export function safeUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const u = new URL(/^[a-z][a-z0-9+.-]*:/i.test(raw) ? raw : `https://${raw}`);
+    return u.protocol === "https:" || u.protocol === "http:" ? u.href : "";
+  } catch (_) {
+    return "";
+  }
+}
+
+/** লগইন পদ্ধতির নাম (Firebase providerId → বাংলা লেবেল) */
+export function providerLabel(providerId) {
+  const map = { "password": "ইমেইল ও পাসওয়ার্ড", "google.com": "Google", "github.com": "GitHub" };
+  return map[providerId] || providerId || "—";
+}
+
+/** অ্যাভাটার src যাচাই — শুধু data:image/... (আপলোড করা ছোট ছবি) বা http(s) লিংক চলবে */
+export function safeImageSrc(value) {
+  const s = String(value || "");
+  return /^data:image\/(png|jpe?g|webp|gif);base64,[a-z0-9+/=]+$/i.test(s) || /^https?:\/\//i.test(s) ? s : "";
+}
+
+/** কোন ছবিটা দেখানো হবে: নিজে আপলোড করা (users/{uid}.avatarData) → Google/GitHub-এর ছবি → নেই */
+export function pickAvatar(user, profile) {
+  return safeImageSrc(profile?.avatarData) || safeImageSrc(user?.photoURL) || "";
+}

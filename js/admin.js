@@ -18,7 +18,7 @@ import {
 import { watchAuthState, logout, getUserProfile, isAdminProfile } from "./auth.js";
 import { icons, icon, serviceIconChoices } from "./icons.js";
 import { showToast } from "./toast.js";
-import { escapeHtml, formatDate, debounce, BOOKING_STATUSES, statusClass } from "./utils.js";
+import { escapeHtml, formatDate, debounce, BOOKING_STATUSES, statusClass, safeUrl } from "./utils.js";
 import * as seed from "./seed-data.js";
 
 const SEED_MAP = {
@@ -605,7 +605,7 @@ function bindUserEvents(list) {
 /* ================= Settings ================= */
 
 async function renderSettings(page) {
-  page.innerHTML = pageHeadHtml("সেটিংস", "সাইটের হিরো টেক্সট, হোয়াটসঅ্যাপ নম্বর ইত্যাদি এখান থেকে পরিবর্তন করুন।") +
+  page.innerHTML = pageHeadHtml("সেটিংস", "সাইটের হিরো টেক্সট, হোয়াটসঅ্যাপ নম্বর ও প্রোফাইল স্লাইডারের লিংক এখান থেকে পরিবর্তন করুন।") +
     `<div id="settingsArea">${skeletonFormHtml()}</div>`;
 
   let current = { ...seed.defaultSettings };
@@ -626,12 +626,22 @@ async function renderSettings(page) {
     { key: "seoDescription", label: "SEO বিবরণ (মেটা ট্যাগ)", type: "textarea" }
   ];
 
+  // প্রোফাইল স্লাইডারের "Code" ও "Course" বাটন — আপনার অন্য দুটো ওয়েবসাইটের লিংক
+  const linkFields = [
+    { key: "codeUrl", label: "Code বাটনের লিংক", isLink: true, hint: "আপনার কোড/টুলস ওয়েবসাইটের ঠিকানা — যেমন https://code.yoursite.com। খালি রাখলে বাটনটি লিংকহীন থাকবে।" },
+    { key: "courseUrl", label: "Course বাটনের লিংক", isLink: true, hint: "আপনার কোর্স ওয়েবসাইটের ঠিকানা — যেমন https://course.yoursite.com" }
+  ];
+  const allFields = [...fields, ...linkFields];
+  const fieldHtml = (f) => f.type === "textarea"
+    ? `<div class="field"><label>${f.label}</label><textarea name="${f.key}" rows="3">${escapeHtml(current[f.key] || "")}</textarea>${f.hint ? `<div class="field-hint">${f.hint}</div>` : ""}</div>`
+    : `<div class="field"><label>${f.label}</label><input type="text"${f.isLink ? ' inputmode="url" autocapitalize="off" spellcheck="false" placeholder="https://"' : ""} name="${f.key}" value="${escapeHtml(current[f.key] || "")}">${f.hint ? `<div class="field-hint">${f.hint}</div>` : ""}</div>`;
+
   document.getElementById("settingsArea").innerHTML = `
     <form id="settingsForm" class="admin-card settings-form">
-      ${fields.map((f) => f.type === "textarea"
-        ? `<div class="field"><label>${f.label}</label><textarea name="${f.key}" rows="3">${escapeHtml(current[f.key] || "")}</textarea>${f.hint ? `<div class="field-hint">${f.hint}</div>` : ""}</div>`
-        : `<div class="field"><label>${f.label}</label><input type="text" name="${f.key}" value="${escapeHtml(current[f.key] || "")}">${f.hint ? `<div class="field-hint">${f.hint}</div>` : ""}</div>`
-      ).join("")}
+      <div class="settings-group-title">সাইট ও হিরো সেকশন</div>
+      ${fields.map(fieldHtml).join("")}
+      <div class="settings-group-title">প্রোফাইল স্লাইডারের লিংক</div>
+      ${linkFields.map(fieldHtml).join("")}
       <div class="form-actions"><span></span><button type="submit" class="btn btn-primary">সংরক্ষণ করুন</button></div>
     </form>`;
 
@@ -639,7 +649,18 @@ async function renderSettings(page) {
     e.preventDefault();
     const fd = new FormData(e.target);
     const data = {};
-    fields.forEach((f) => { data[f.key] = String(fd.get(f.key) || "").trim(); });
+    allFields.forEach((f) => { data[f.key] = String(fd.get(f.key) || "").trim(); });
+    // লিংক ঘরগুলো যাচাই: শুধু http/https চলবে; https:// ছাড়া লিখলে নিজে বসিয়ে দেয়
+    for (const f of linkFields) {
+      if (!data[f.key]) continue;
+      const clean = safeUrl(data[f.key]);
+      if (!clean) {
+        showToast(`"${f.label}" সঠিক লিংক নয় — https:// দিয়ে শুরু হওয়া ঠিকানা দিন।`, "error");
+        e.target.querySelector(`[name="${f.key}"]`).focus();
+        return;
+      }
+      data[f.key] = clean;
+    }
     const btn = e.target.querySelector("button[type=submit]");
     btn.disabled = true;
     try {

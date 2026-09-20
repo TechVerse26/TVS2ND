@@ -1,30 +1,22 @@
 // js/animations.js
-// একটা মাত্র orchestrated মোশন প্যাটার্ন — স্ক্রল-রিভিল — পুরো সাইট জুড়ে ব্যবহৃত হয়েছে,
-// আলাদা আলাদা এলিমেন্টে ছড়ানো র‍্যান্ডম ইফেক্ট এড়ানো হয়েছে।
+// মোশন এখন ইচ্ছাকৃতভাবে কম: শুধু (১) হিরো টার্মিনালের টাইপিং — পেজে ঢোকার একমাত্র "মুহূর্ত",
+// আর (২) স্ট্যাটস কাউন্টার যখন ভিউপোর্টে আসে। বাকি সব মোশন ইউজারের অ্যাকশনের উত্তরে
+// (ড্রয়ার খোলা, ট্যাব বদল, অ্যাকর্ডিয়ন) — সেগুলো CSS-এ।
 
-export function initScrollReveal() {
-  const items = document.querySelectorAll(".reveal");
-  if (!("IntersectionObserver" in window) || items.length === 0) {
-    items.forEach((el) => el.classList.add("in"));
-    return;
-  }
-  const io = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("in");
-          io.unobserve(entry.target);
-        }
-      });
-    },
-    { threshold: 0.15 }
-  );
-  items.forEach((el) => io.observe(el));
-}
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export function animateCounters() {
   const cells = document.querySelectorAll("[data-count]");
   if (cells.length === 0) return;
+
+  const finish = (el) => {
+    el.textContent = Math.round(parseFloat(el.dataset.count)) + (el.dataset.suffix || "");
+  };
+  if (reducedMotion() || !("IntersectionObserver" in window)) {
+    cells.forEach(finish);
+    return;
+  }
+
   const io = new IntersectionObserver(
     (entries) => {
       entries.forEach((entry) => {
@@ -59,7 +51,7 @@ const terminalLines = [
 
 export function initHeroTerminal(bodyEl) {
   if (!bodyEl) return;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  if (reducedMotion()) {
     bodyEl.innerHTML = terminalLines
       .map((l) => `<div class="terminal-line ${l.cls}">${l.text}</div>`)
       .join("");

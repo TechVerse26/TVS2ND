@@ -1,59 +1,75 @@
 // js/app.js
 // মূল এন্ট্রি পয়েন্ট — সব মডিউল এখানে একসাথে যুক্ত হয়।
-// কন্টেন্ট এখন Firestore থেকে আসে (js/content.js), স্ট্যাটিক data.js থেকে না —
-// অ্যাডমিন প্যানেলে কিছু পরিবর্তন করলে সাইট রিলোডেই সেটা এখানে দেখা যাবে।
+// কন্টেন্ট Firestore থেকে আসে (js/content.js) — অ্যাডমিন প্যানেলে কিছু বদলালে সাইট রিলোডেই দেখা যায়।
+// প্রোফাইল এখন আলাদা পেজ নয়: হেডারের অ্যাভাটার ট্যাপ করলে ডান দিক থেকে স্লাইডার খোলে (js/drawer.js)।
 
 import { getAllContent, getSettings } from "./content.js";
+import { defaultSettings } from "./seed-data.js";
 import {
   renderServices, renderPortfolio, renderCaseStudies, renderStats,
   renderTestimonials, renderTestimonialDots, renderTeam, renderPricing, renderFAQ,
   avatarOrLetter
 } from "./templates.js";
-import { icons } from "./icons.js";
-import { initScrollReveal, animateCounters, initHeroTerminal } from "./animations.js";
+import { animateCounters, initHeroTerminal } from "./animations.js";
 import { showToast } from "./toast.js";
-import { initRouter, goTo } from "./router.js";
+import { initRouter, clearHash } from "./router.js";
+import { initTheme, toggleTheme } from "./theme.js";
 import {
   registerWithEmail, loginWithEmail, loginWithGoogle, loginWithGithub,
-  resetPassword, logout, watchAuthState, getUserProfile, saveUserProfile,
-  friendlyAuthError, isAdminProfile
+  resetPassword, watchAuthState, getUserProfile, ensureUserDoc, friendlyAuthError
 } from "./auth.js";
-import { escapeHtml, parseAccent, formatDate, statusClass } from "./utils.js";
+import { escapeHtml, parseAccent, pickAvatar } from "./utils.js";
+import { createDrawer } from "./drawer.js";
+import { lockScroll, unlockScroll } from "./scrolllock.js";
 import { db } from "./firebase-config.js";
 import {
-  collection, addDoc, query, where, orderBy, getDocs, serverTimestamp
+  collection, addDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 let currentUser = null;
+let currentProfile = null;
+let authResolved = false;
+let pendingProfileRoute = false;
+let drawer = null;
 let siteContent = {
   services: [], portfolio: [], caseStudies: [], testimonials: [], team: [], stats: [], pricingPlans: [], faqItems: []
 };
-let siteSettings = {};
+let siteSettings = { ...defaultSettings };
 
-/* ---------------- Theme ---------------- */
-function initTheme() {
-  const saved = localStorage.getItem("tv-theme");
-  if (saved) document.documentElement.setAttribute("data-theme", saved);
-  const btn = document.getElementById("themeToggle");
-  btn.addEventListener("click", () => {
-    const cur = document.documentElement.getAttribute("data-theme") ||
-      (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
-    const next = cur === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("tv-theme", next);
-  });
+const $ = (id) => document.getElementById(id);
+
+/* ---------------- Nav: থিম বাটন, ☰, স্ক্রল-স্টেট, বর্তমান সেকশন হাইলাইট ---------------- */
+function initNav() {
+  $("themeToggle").addEventListener("click", toggleTheme);
+  $("navToggle").addEventListener("click", () => drawer.open("menu"));
+
+  const nav = $("siteNav");
+  const onScroll = () => nav.classList.toggle("is-scrolled", window.scrollY > 8);
+  window.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
 }
 
-/* ---------------- Mobile nav ---------------- */
-function initMobileNav() {
-  const toggle = document.getElementById("navToggle");
-  const links = document.getElementById("navLinks");
-  toggle.addEventListener("click", () => {
-    links.classList.toggle("open");
-  });
-  links.querySelectorAll("a").forEach((a) =>
-    a.addEventListener("click", () => links.classList.remove("open"))
+function initScrollSpy() {
+  const links = [...document.querySelectorAll("#navLinks a[href^='#']")];
+  const byId = new Map(links.map((a) => [a.getAttribute("href").slice(1), a]));
+  const targets = [...byId.keys()].map((id) => document.getElementById(id)).filter(Boolean);
+  if (!targets.length || !("IntersectionObserver" in window)) return;
+  const io = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((en) => {
+        const link = byId.get(en.target.id);
+        if (!link) return;
+        if (en.isIntersecting) {
+          links.forEach((l) => l.removeAttribute("aria-current"));
+          link.setAttribute("aria-current", "true");
+        } else if (link.getAttribute("aria-current") === "true") {
+          link.removeAttribute("aria-current");
+        }
+      });
+    },
+    { rootMargin: "-45% 0px -50% 0px" }
   );
+  targets.forEach((t) => io.observe(t));
 }
 
 /* ---------------- Loading skeletons (Firestore থেকে কন্টেন্ট আসার আগ পর্যন্ত) ---------------- */
@@ -64,23 +80,20 @@ function skeletonCards(n) {
 }
 function showLoadingSkeletons() {
   ["servicesGrid", "portfolioGrid", "teamGrid", "pricingGrid"].forEach((id) => {
-    const el = document.getElementById(id);
+    const el = $(id);
     if (el) el.innerHTML = skeletonCards(id === "servicesGrid" ? 6 : 3);
   });
-  const caseList = document.getElementById("caseList");
-  if (caseList) caseList.innerHTML = skeletonCards(2);
-  const faqList = document.getElementById("faqList");
-  if (faqList) faqList.innerHTML = skeletonCards(3);
-  const statsStrip = document.getElementById("statsStrip");
-  if (statsStrip) statsStrip.innerHTML = `<div class="skel-row skel" style="height:90px;width:100%;grid-column:1/-1;"></div>`;
+  if ($("caseList")) $("caseList").innerHTML = skeletonCards(2);
+  if ($("faqList")) $("faqList").innerHTML = skeletonCards(3);
+  if ($("statsStrip")) $("statsStrip").innerHTML = `<div class="skel-row skel" style="height:90px;width:100%;grid-column:1/-1;border-radius:0;"></div>`;
 }
 
-/* ---------------- সেটিংস প্রয়োগ (হিরো টেক্সট, WhatsApp নম্বর, SEO) ---------------- */
+/* ---------------- সেটিংস প্রয়োগ (হিরো টেক্সট, WhatsApp নম্বর, SEO, Code/Course লিংক) ---------------- */
 function applySettings(settings) {
-  const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  const set = (id, text) => { const el = $(id); if (el && text) el.textContent = text; };
   set("heroEyebrow", settings.heroEyebrow);
-  const titleEl = document.getElementById("heroTitle");
-  if (titleEl) titleEl.innerHTML = parseAccent(settings.heroTitle);
+  const titleEl = $("heroTitle");
+  if (titleEl && settings.heroTitle) titleEl.innerHTML = parseAccent(settings.heroTitle);
   set("heroSub", settings.heroSubtitle);
   set("heroCtaPrimary", settings.heroCtaPrimary);
   set("heroCtaSecondary", settings.heroCtaSecondary);
@@ -88,56 +101,58 @@ function applySettings(settings) {
   const metaDesc = document.querySelector('meta[name="description"]');
   if (metaDesc && settings.seoDescription) metaDesc.setAttribute("content", settings.seoDescription);
 
-  const waLink = document.getElementById("footerWaLink");
+  const waLink = $("footerWaLink");
   if (waLink && settings.whatsappNumber) waLink.href = `https://wa.me/${settings.whatsappNumber}`;
+
+  if (drawer) drawer.setSettings(settings);
 }
 
 /* ---------------- কন্টেন্ট রেন্ডার ---------------- */
 function renderContent(content) {
-  document.getElementById("servicesGrid").innerHTML = renderServices(content.services);
-  document.getElementById("portfolioGrid").innerHTML = renderPortfolio(content.portfolio);
-  document.getElementById("caseList").innerHTML = renderCaseStudies(content.caseStudies);
-  document.getElementById("statsStrip").innerHTML = renderStats(content.stats);
-  document.getElementById("tmSlides").innerHTML = renderTestimonials(content.testimonials);
-  document.getElementById("tmDots").innerHTML = renderTestimonialDots(content.testimonials);
-  document.getElementById("teamGrid").innerHTML = renderTeam(content.team);
-  document.getElementById("pricingGrid").innerHTML = renderPricing(content.pricingPlans);
-  document.getElementById("faqList").innerHTML = renderFAQ(content.faqItems);
-  document.getElementById("year").textContent = new Date().getFullYear();
+  $("servicesGrid").innerHTML = renderServices(content.services);
+  $("portfolioGrid").innerHTML = renderPortfolio(content.portfolio);
+  $("caseList").innerHTML = renderCaseStudies(content.caseStudies);
+  $("statsStrip").innerHTML = renderStats(content.stats);
+  $("tmSlides").innerHTML = renderTestimonials(content.testimonials);
+  $("tmDots").innerHTML = renderTestimonialDots(content.testimonials);
+  $("teamGrid").innerHTML = renderTeam(content.team);
+  $("pricingGrid").innerHTML = renderPricing(content.pricingPlans);
+  $("faqList").innerHTML = renderFAQ(content.faqItems);
   buildServicePills();
+  // পোর্টফোলিওর বর্তমান ফিল্টার (যদি ইউজার আগেই বেছে থাকে) আবার প্রয়োগ
+  const activeChip = document.querySelector(".filter-row .chip.active");
+  if (activeChip && activeChip.dataset.filter !== "all") activeChip.click();
 }
 
 /* ---------------- Portfolio filter ---------------- */
 function initPortfolioFilter() {
   const chips = document.querySelectorAll(".filter-row .chip");
-  const cards = () => document.querySelectorAll("#portfolioGrid .pf-card");
   chips.forEach((chip) => {
     chip.addEventListener("click", () => {
       chips.forEach((c) => c.classList.remove("active"));
       chip.classList.add("active");
       const cat = chip.dataset.filter;
-      cards().forEach((card) => {
+      document.querySelectorAll("#portfolioGrid .pf-card").forEach((card) => {
         card.style.display = cat === "all" || card.dataset.category === cat ? "" : "none";
       });
     });
   });
 }
 
-/* ---------------- FAQ accordion ---------------- */
+/* ---------------- FAQ accordion (উচ্চতার অ্যানিমেশন CSS-এ — grid-template-rows) ---------------- */
 function initFAQ() {
-  document.getElementById("faqList").addEventListener("click", (e) => {
+  $("faqList").addEventListener("click", (e) => {
     const q = e.target.closest(".faq-q");
     if (!q) return;
     const item = q.closest(".faq-item");
-    const a = item.querySelector(".faq-a");
-    const isOpen = item.classList.contains("open");
+    const willOpen = !item.classList.contains("open");
     document.querySelectorAll(".faq-item.open").forEach((el) => {
       el.classList.remove("open");
-      el.querySelector(".faq-a").style.maxHeight = null;
+      el.querySelector(".faq-q").setAttribute("aria-expanded", "false");
     });
-    if (!isOpen) {
+    if (willOpen) {
       item.classList.add("open");
-      a.style.maxHeight = a.scrollHeight + "px";
+      q.setAttribute("aria-expanded", "true");
     }
   });
 }
@@ -152,40 +167,56 @@ function initTestimonials() {
     dots().forEach((d) => d.classList.toggle("active", +d.dataset.i === i));
     idx = i;
   }
-  document.getElementById("tmDots").addEventListener("click", (e) => {
+  $("tmDots").addEventListener("click", (e) => {
     const dot = e.target.closest(".tm-dot");
     if (dot) show(+dot.dataset.i);
   });
-  if (siteContent.testimonials.length > 1) {
-    setInterval(() => show((idx + 1) % siteContent.testimonials.length), 6000);
-  }
+  setInterval(() => {
+    const n = slides().length;
+    if (n > 1 && !document.hidden) show((idx + 1) % n);
+  }, 6000);
 }
 
 /* ---------------- WhatsApp float ---------------- */
 function initWhatsApp() {
-  const btn = document.getElementById("waFloat");
-  const tip = document.getElementById("waTooltip");
+  const btn = $("waFloat");
+  const tip = $("waTooltip");
   btn.addEventListener("mouseenter", () => tip.classList.add("show"));
   btn.addEventListener("mouseleave", () => tip.classList.remove("show"));
   btn.addEventListener("click", () => {
     const msg = encodeURIComponent(siteSettings.whatsappMessage || "");
-    window.open(`https://wa.me/${siteSettings.whatsappNumber}?text=${msg}`, "_blank");
+    window.open(`https://wa.me/${siteSettings.whatsappNumber}?text=${msg}`, "_blank", "noopener");
   });
 }
 
 /* ---------------- Auth modal ---------------- */
+let lastAuthFocus = null;
+
 function openAuthModal(view = "login") {
-  document.getElementById("authOverlay").classList.add("open");
+  const overlay = $("authOverlay");
+  if (!overlay.classList.contains("open")) {
+    lastAuthFocus = document.activeElement;
+    overlay.classList.add("open");
+    lockScroll();
+  }
   switchAuthView(view);
+  setTimeout(() => {
+    const first = overlay.querySelector(".auth-view.active input");
+    if (first) first.focus({ preventScroll: true });
+  }, 120);
 }
 function closeAuthModal() {
-  document.getElementById("authOverlay").classList.remove("open");
+  const overlay = $("authOverlay");
+  if (!overlay.classList.contains("open")) return;
+  overlay.classList.remove("open");
+  unlockScroll();
+  if (lastAuthFocus && document.contains(lastAuthFocus) && lastAuthFocus.focus) lastAuthFocus.focus({ preventScroll: true });
 }
 function switchAuthView(view) {
   document.querySelectorAll(".auth-view").forEach((v) => v.classList.remove("active"));
-  document.getElementById(`view${cap(view)}`).classList.add("active");
+  $(`view${cap(view)}`).classList.add("active");
   document.querySelectorAll(".auth-tabs button").forEach((t) => t.classList.remove("active"));
-  const tabBtn = document.getElementById(`tab${cap(view)}`);
+  const tabBtn = $(`tab${cap(view)}`);
   if (tabBtn) tabBtn.classList.add("active");
 }
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -197,21 +228,40 @@ function setFieldError(fieldEl, message) {
 }
 
 function initAuthModal() {
-  document.querySelectorAll("[data-open-auth]").forEach((btn) =>
-    btn.addEventListener("click", () => openAuthModal(btn.dataset.openAuth || "login"))
-  );
-  document.getElementById("authOverlay").addEventListener("click", (e) => {
-    if (e.target.id === "authOverlay") closeAuthModal();
-  });
+  // "লগইন"/"সাইন আপ" বাটনগুলো (হেডার ছাড়াও যেকোনো [data-open-auth]) — হেডারেরগুলো renderNavAuthArea নিজে বাঁধে
+  const overlay = $("authOverlay");
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) closeAuthModal(); });
   document.querySelector(".modal-close").addEventListener("click", closeAuthModal);
+  document.addEventListener("keydown", (e) => {
+    if (!overlay.classList.contains("open")) return;
+    if (e.key === "Escape") { closeAuthModal(); return; }
+    if (e.key === "Tab") {
+      const f = [...overlay.querySelectorAll("button, input, a[href]")].filter((el) => !el.disabled && el.offsetParent !== null);
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
 
-  document.getElementById("tabLogin").addEventListener("click", () => switchAuthView("login"));
-  document.getElementById("tabSignup").addEventListener("click", () => switchAuthView("signup"));
+  $("tabLogin").addEventListener("click", () => switchAuthView("login"));
+  $("tabSignup").addEventListener("click", () => switchAuthView("signup"));
   document.querySelectorAll("[data-show-reset]").forEach((b) => b.addEventListener("click", () => switchAuthView("reset")));
   document.querySelectorAll("[data-show-login]").forEach((b) => b.addEventListener("click", () => switchAuthView("login")));
 
+  // পাসওয়ার্ড দেখা/লুকানো
+  overlay.addEventListener("click", (e) => {
+    const btn = e.target.closest(".pw-toggle");
+    if (!btn) return;
+    const input = btn.parentElement.querySelector("input");
+    const show = input.type === "password";
+    input.type = show ? "text" : "password";
+    btn.classList.toggle("is-shown", show);
+    btn.setAttribute("aria-label", show ? "পাসওয়ার্ড লুকান" : "পাসওয়ার্ড দেখান");
+  });
+
   // ইমেইল লগইন
-  document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  $("loginForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = e.target.email.value.trim();
     const password = e.target.password.value;
@@ -220,6 +270,7 @@ function initAuthModal() {
     try {
       await loginWithEmail(email, password);
       showToast("সফলভাবে লগইন হয়েছে।");
+      e.target.reset();
       closeAuthModal();
     } catch (err) {
       showToast(friendlyAuthError(err), "error");
@@ -229,7 +280,7 @@ function initAuthModal() {
   });
 
   // ইমেইল সাইন আপ
-  document.getElementById("signupForm").addEventListener("submit", async (e) => {
+  $("signupForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const name = e.target.name.value.trim();
     const email = e.target.email.value.trim();
@@ -245,6 +296,7 @@ function initAuthModal() {
     try {
       await registerWithEmail(name, email, password);
       showToast("অ্যাকাউন্ট তৈরি হয়েছে! স্বাগতম।");
+      e.target.reset();
       closeAuthModal();
     } catch (err) {
       showToast(friendlyAuthError(err), "error");
@@ -254,7 +306,7 @@ function initAuthModal() {
   });
 
   // পাসওয়ার্ড রিসেট
-  document.getElementById("resetForm").addEventListener("submit", async (e) => {
+  $("resetForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const email = e.target.email.value.trim();
     const submitBtn = e.target.querySelector("button[type=submit]");
@@ -295,19 +347,20 @@ function initAuthModal() {
   );
 }
 
-/* ---------------- Nav auth area (লগইন বাটন <-> ইউজার চিপ) ---------------- */
+/* ---------------- Nav auth area (লগইন বাটন <-> অ্যাভাটার) ---------------- */
 function renderNavAuthArea() {
-  const area = document.getElementById("authAreaNav");
+  const area = $("authAreaNav");
   if (currentUser) {
+    const name = (currentUser.displayName || (currentProfile && currentProfile.name) || "").trim();
     area.innerHTML = `
-      <button class="user-chip" id="userChipBtn">
-        <span class="chip-avatar-wrap">${avatarOrLetter(currentUser.photoURL, currentUser.displayName || currentUser.email)}</span>
-        <span class="hide-mobile">${escapeHtml(currentUser.displayName || "প্রোফাইল")}</span>
+      <button type="button" class="user-chip" id="userChipBtn" aria-haspopup="dialog" aria-controls="drawer" aria-label="প্রোফাইল খুলুন">
+        <span class="chip-avatar-wrap">${avatarOrLetter(pickAvatar(currentUser, currentProfile), name || currentUser.email)}</span>
+        <span class="chip-name hide-mobile">${escapeHtml(name || "প্রোফাইল")}</span>
       </button>`;
-    document.getElementById("userChipBtn").addEventListener("click", () => goTo("profile"));
+    $("userChipBtn").addEventListener("click", () => drawer.open("profile"));
   } else {
-    area.innerHTML = `<button class="btn btn-outline btn-sm" data-open-auth="login">লগইন</button>
-      <button class="btn btn-primary btn-sm hide-mobile" data-open-auth="signup">সাইন আপ</button>`;
+    area.innerHTML = `<button type="button" class="btn btn-outline btn-sm" data-open-auth="login">লগইন</button>
+      <button type="button" class="btn btn-primary btn-sm hide-mobile" data-open-auth="signup">সাইন আপ</button>`;
     area.querySelectorAll("[data-open-auth]").forEach((btn) =>
       btn.addEventListener("click", () => openAuthModal(btn.dataset.openAuth))
     );
@@ -316,18 +369,37 @@ function renderNavAuthArea() {
 
 /* ---------------- Booking form ---------------- */
 function buildServicePills() {
-  const wrap = document.getElementById("servicePills");
+  const wrap = $("servicePills");
   if (!wrap) return;
   wrap.innerHTML = siteContent.services
-    .map((s, i) => `<button type="button" data-val="${escapeHtml(s.title)}"${i === 0 ? ' class="active"' : ""}>${escapeHtml(s.title)}</button>`)
+    .map((s, i) => `<button type="button" data-val="${escapeHtml(s.title)}" aria-pressed="${i === 0}"${i === 0 ? ' class="active"' : ""}>${escapeHtml(s.title)}</button>`)
     .join("");
 }
 
+function scrollToBooking() {
+  const el = $("booking");
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+/** লগইন থাকলে নাম/ইমেইল/ফোন আগেই ভরে দেয় (ইউজার আগে থেকে কিছু লিখে থাকলে সেটা রাখে) */
+function prefillBooking() {
+  if (!currentUser) return;
+  const fill = (id, val) => { const el = $(id); if (el && !el.value && val) el.value = val; };
+  fill("bName", (currentProfile && currentProfile.name) || currentUser.displayName);
+  fill("bEmail", currentUser.email);
+  fill("bPhone", currentProfile && currentProfile.phone);
+}
+
 function initBookingForm() {
-  const steps = Array.from(document.querySelectorAll(".form-step"));
-  const trackEls = Array.from(document.querySelectorAll(".step-track span"));
+  const form = $("bookingForm");
+  const steps = Array.from(form.querySelectorAll(".form-step"));
+  const trackEls = Array.from(form.querySelectorAll(".step-track > span"));
   let step = 0;
-  let chosenService = siteContent.services[0]?.title || "";
+
+  const chosenService = () => {
+    const btn = form.querySelector("#servicePills button.active");
+    return (btn && btn.dataset.val) || (siteContent.services[0] && siteContent.services[0].title) || "";
+  };
 
   function show(i) {
     steps.forEach((s, idx) => s.classList.toggle("active", idx === i));
@@ -335,41 +407,46 @@ function initBookingForm() {
     step = i;
   }
 
-  document.getElementById("servicePills").addEventListener("click", (e) => {
+  /** সক্রিয় ধাপের required ঘরগুলো যাচাই — ঠিক না থাকলে ফোকাস + বার্তা */
+  function stepIsValid(i) {
+    for (const inp of steps[i].querySelectorAll("input[required]")) {
+      if (!inp.checkValidity()) {
+        inp.focus();
+        showToast(inp.type === "email" && inp.value.trim() ? "সঠিক ইমেইল ঠিকানা লিখুন।" : "অনুগ্রহ করে প্রয়োজনীয় ঘরগুলো পূরণ করুন।", "error");
+        return false;
+      }
+    }
+    return true;
+  }
+  function goNext() {
+    if (!stepIsValid(step)) return;
+    if (step < steps.length - 1) show(step + 1);
+  }
+
+  $("servicePills").addEventListener("click", (e) => {
     const b = e.target.closest("button");
     if (!b) return;
-    document.querySelectorAll("#servicePills button").forEach((x) => x.classList.remove("active"));
+    document.querySelectorAll("#servicePills button").forEach((x) => { x.classList.remove("active"); x.setAttribute("aria-pressed", "false"); });
     b.classList.add("active");
-    chosenService = b.dataset.val;
+    b.setAttribute("aria-pressed", "true");
   });
 
-  document.querySelectorAll(".step-next").forEach((btn) =>
-    btn.addEventListener("click", () => {
-      const active = steps[step];
-      const requiredInputs = active.querySelectorAll("input[required]");
-      for (const inp of requiredInputs) {
-        if (!inp.value.trim()) {
-          inp.focus();
-          showToast("অনুগ্রহ করে প্রয়োজনীয় ঘরগুলো পূরণ করুন।", "error");
-          return;
-        }
-      }
-      if (step < steps.length - 1) show(step + 1);
-    })
-  );
-  document.querySelectorAll(".step-prev").forEach((btn) =>
+  form.querySelectorAll(".step-next").forEach((btn) => btn.addEventListener("click", goNext));
+  form.querySelectorAll(".step-prev").forEach((btn) =>
     btn.addEventListener("click", () => { if (step > 0) show(step - 1); })
   );
 
-  document.getElementById("bookingForm").addEventListener("submit", async (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const form = e.target;
+    // প্রথম ধাপে Enter চাপলে সরাসরি জমা না দিয়ে পরের ধাপে যাওয়া
+    if (step < steps.length - 1) { goNext(); return; }
+    if (!stepIsValid(0)) { show(0); return; }
     const submitBtn = form.querySelector("button[type=submit]");
     submitBtn.disabled = true;
     submitBtn.textContent = "পাঠানো হচ্ছে...";
     try {
       await addDoc(collection(db, "bookings"), {
-        service: chosenService,
+        service: chosenService(),
         name: form.bName.value.trim(),
         email: form.bEmail.value.trim(),
         phone: form.bPhone.value.trim(),
@@ -382,8 +459,12 @@ function initBookingForm() {
       });
       showToast("অনুরোধ পাঠানো হয়েছে! শীঘ্রই যোগাযোগ করা হবে।");
       form.reset();
+      buildServicePills();
       show(0);
+      prefillBooking();
+      if (currentUser) drawer.refreshBookings(true);
     } catch (err) {
+      console.error(err);
       showToast("পাঠাতে সমস্যা হয়েছে, আবার চেষ্টা করুন।", "error");
     } finally {
       submitBtn.disabled = false;
@@ -392,115 +473,20 @@ function initBookingForm() {
   });
 
   document.querySelectorAll("[data-open-booking]").forEach((btn) =>
-    btn.addEventListener("click", () => {
-      document.getElementById("booking")?.scrollIntoView({ behavior: "smooth" });
-    })
+    btn.addEventListener("click", scrollToBooking)
   );
-}
-
-/* ---------------- Profile view (অ্যাকাউন্ট ড্যাশবোর্ড) ---------------- */
-async function renderProfileView() {
-  if (!currentUser) {
-    openAuthModal("login");
-    goTo("home");
-    return;
-  }
-  document.getElementById("profileName").textContent = currentUser.displayName || "নাম দেওয়া হয়নি";
-  document.getElementById("profileEmail").textContent = currentUser.email || "";
-  document.getElementById("profileAvatarWrap").innerHTML =
-    avatarOrLetter(currentUser.photoURL, currentUser.displayName || currentUser.email);
-
-  const profile = await getUserProfile(currentUser.uid);
-  const admin = isAdminProfile(profile);
-  document.getElementById("profileRoleBadge").hidden = !admin;
-  document.getElementById("adminNavLink").hidden = !admin;
-
-  const form = document.getElementById("profileForm");
-  form.pName.value = profile?.name || currentUser.displayName || "";
-  form.pPhone.value = profile?.phone || "";
-
-  const statsEl = document.getElementById("profileStats");
-  const list = document.getElementById("profileBookings");
-  statsEl.innerHTML = "";
-  list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${icons.inbox}</div><p>লোড হচ্ছে...</p></div>`;
-
-  try {
-    const q = query(collection(db, "bookings"), where("uid", "==", currentUser.uid), orderBy("createdAt", "desc"));
-    const snap = await getDocs(q);
-    const bookings = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-
-    const done = bookings.filter((b) => b.status === "সম্পন্ন").length;
-    const active = bookings.length - done - bookings.filter((b) => b.status === "বাতিল").length;
-    statsEl.innerHTML = `
-      <div class="profile-stat"><div class="profile-stat-icon ps-total">${icons.inbox}</div><b>${bookings.length}</b><span>মোট অনুরোধ</span></div>
-      <div class="profile-stat"><div class="profile-stat-icon ps-active">${icons.bolt}</div><b>${active}</b><span>চলমান</span></div>
-      <div class="profile-stat"><div class="profile-stat-icon ps-done">${icons.check}</div><b>${done}</b><span>সম্পন্ন</span></div>`;
-
-    if (bookings.length === 0) {
-      list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${icons.inbox}</div><p>এখনো কোনো অনুরোধ পাঠানো হয়নি।</p><button type="button" class="btn btn-primary btn-sm" id="profileStartBtn">প্রজেক্ট শুরু করুন</button></div>`;
-      document.getElementById("profileStartBtn")?.addEventListener("click", () => {
-        goTo("home");
-        requestAnimationFrame(() => document.getElementById("booking")?.scrollIntoView({ behavior: "smooth" }));
-      });
-    } else {
-      list.innerHTML = bookings.map((b) => `
-        <div class="booking-card ${statusClass(b.status)}">
-          <div class="booking-card-top">
-            <div class="booking-card-title"><span class="booking-card-icon">${icons.layout}</span><b>${escapeHtml(b.service || "—")}</b></div>
-            <span class="status-badge ${statusClass(b.status)}">${escapeHtml(b.status || "নতুন")}</span>
-          </div>
-          <div class="booking-meta"><span>${formatDate(b.createdAt)}</span>${b.budget ? `<span>${escapeHtml(b.budget)}</span>` : ""}</div>
-        </div>`).join("");
-    }
-  } catch (err) {
-    console.error(err);
-    // ফোনে DevTools/Console খোলা কঠিন, তাই এরর কোডটা সরাসরি স্ক্রিনেই দেখানো হচ্ছে —
-    // এতে কনসোল না খুলেই বোঝা যাবে সমস্যাটা rules-এ নাকি ইনডেক্সে।
-    let detail = "";
-    if (err?.code === "permission-denied") {
-      detail = "কারণ: Firestore Rules এখনো Publish করা হয়নি বা rules ভুল আছে (permission-denied)।";
-    } else if (err?.code === "failed-precondition") {
-      detail = "কারণ: প্রয়োজনীয় Firestore ইনডেক্স এখনো তৈরি হয়নি (failed-precondition)। Firebase Console → Firestore Database → Indexes ট্যাবে গিয়ে তৈরি করুন।";
-    } else if (err?.code) {
-      detail = `এরর কোড: ${err.code}`;
-    }
-    list.innerHTML = `<div class="empty-state"><div class="empty-state-icon">${icons.warn}</div><p>বুকিং হিস্টরি লোড করা যায়নি।</p>${detail ? `<p class="mono-sm muted" style="margin-top:-6px;">${escapeHtml(detail)}</p>` : ""}</div>`;
-  }
-}
-
-function initProfile() {
-  document.getElementById("profileForm").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const submitBtn = e.target.querySelector("button[type=submit]");
-    submitBtn.disabled = true;
-    try {
-      await saveUserProfile(currentUser.uid, {
-        name: e.target.pName.value.trim(),
-        phone: e.target.pPhone.value.trim()
-      });
-      showToast("প্রোফাইল আপডেট হয়েছে।");
-    } catch (_) {
-      showToast("আপডেট করতে সমস্যা হয়েছে।", "error");
-    } finally {
-      submitBtn.disabled = false;
-    }
-  });
-  document.getElementById("logoutBtn").addEventListener("click", async () => {
-    await logout();
-    showToast("লগআউট হয়েছে।");
-    goTo("home");
+  // প্যাকেজ কার্ডের "কোট চান" বাটনগুলো পরে রেন্ডার হয় — তাই ডেলিগেশন
+  $("pricingGrid").addEventListener("click", (e) => {
+    if (e.target.closest("[data-open-booking]")) scrollToBooking();
   });
 }
 
-/* ---------------- Router views ---------------- */
-function showHomeView() {
-  document.getElementById("mainContent").style.display = "";
-  document.getElementById("profileView").classList.remove("active");
-}
-function showProfileViewShell() {
-  document.getElementById("mainContent").style.display = "none";
-  document.getElementById("profileView").classList.add("active");
-  renderProfileView();
+/* ---------------- #profile লিংক (পুরোনো রাউট) → স্লাইডার ---------------- */
+function openProfileRoute() {
+  pendingProfileRoute = false;
+  clearHash();
+  if (currentUser) drawer.open("profile");
+  else openAuthModal("login");
 }
 
 /* ---------------- PWA ---------------- */
@@ -514,35 +500,67 @@ function initPWA() {
 
 /* ---------------- Init ---------------- */
 document.addEventListener("DOMContentLoaded", async () => {
+  // ইন্টারঅ্যাক্টিভ অংশগুলো কন্টেন্টের জন্য অপেক্ষা না করেই চালু — ইন্টারনেট ধীর হলেও বাটন কাজ করবে
   initTheme();
-  initMobileNav();
   initPWA();
-  initHeroTerminal(document.getElementById("terminalBody"));
+  $("year").textContent = new Date().getFullYear();
+  initHeroTerminal($("terminalBody"));
   showLoadingSkeletons();
 
+  drawer = createDrawer({
+    onOpenAuth: (view) => openAuthModal(view),
+    onStartProject: scrollToBooking,
+    onProfileChange: (profile) => { currentProfile = profile; renderNavAuthArea(); prefillBooking(); }
+  });
+  drawer.setSettings(siteSettings);
+
+  initNav();
+  initScrollSpy();
+  initAuthModal();
+  initPortfolioFilter();
+  initFAQ();
+  initTestimonials();
+  initWhatsApp();
+  initBookingForm();
+  renderNavAuthArea();
+
+  initRouter({
+    onProfile: () => { if (authResolved) openProfileRoute(); else pendingProfileRoute = true; },
+    onHome: () => {}
+  });
+
+  watchAuthState(async (user) => {
+    currentUser = user;
+    currentProfile = null;
+    renderNavAuthArea();
+    drawer.setUser(user);
+    if (user) {
+      try {
+        let profile = await getUserProfile(user.uid);
+        if (!profile) {
+          await ensureUserDoc(user);
+          profile = await getUserProfile(user.uid);
+        }
+        if (currentUser !== user) return; // ইতিমধ্যে লগ আউট/অ্যাকাউন্ট বদল হয়ে গেছে
+        currentProfile = profile;
+      } catch (err) {
+        console.error("Profile load failed:", err);
+      }
+      drawer.setProfile(currentProfile);
+      renderNavAuthArea();
+      prefillBooking();
+    }
+    if (!authResolved) {
+      authResolved = true;
+      if (pendingProfileRoute || window.location.hash === "#profile") openProfileRoute();
+    }
+  });
+
+  // কন্টেন্ট ও সেটিংস
   const [content, settings] = await Promise.all([getAllContent(), getSettings()]);
   siteContent = content;
   siteSettings = settings;
   applySettings(settings);
   renderContent(content);
-
-  initScrollReveal();
   animateCounters();
-  initPortfolioFilter();
-  initFAQ();
-  initTestimonials();
-  initWhatsApp();
-  initAuthModal();
-  initBookingForm();
-  initProfile();
-
-  initRouter({ onHome: showHomeView, onProfile: showProfileViewShell });
-
-  watchAuthState((user) => {
-    currentUser = user;
-    renderNavAuthArea();
-    if (window.location.hash === "#profile") {
-      user ? renderProfileView() : (openAuthModal("login"), goTo("home"));
-    }
-  });
 });

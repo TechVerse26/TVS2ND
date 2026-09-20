@@ -1,8 +1,7 @@
 // js/templates.js
 // Firestore থেকে আসা কন্টেন্ট থেকে প্রতিটি সেকশনের HTML তৈরি করে।
 // প্রতিটা ডাইনামিক ভ্যালু escapeHtml() দিয়ে বসানো হয় — শুধু সিকিউরিটির জন্য না, বরং
-// যাতে কারো কনটেন্টে হঠাৎ &, <, > থাকলেও পুরো লেআউট ভেঙে না যায় (এটাই আগের "আইকন/ফিচার
-// ঠিকভাবে দেখা যায় না" সমস্যাগুলোর একটা সাধারণ কারণ হতে পারে)।
+// যাতে কারো কনটেন্টে হঠাৎ &, <, > থাকলেও পুরো লেআউট ভেঙে না যায়।
 
 import { icons, icon } from "./icons.js";
 import { escapeHtml } from "./utils.js";
@@ -13,8 +12,8 @@ function initial(name) {
 
 /** ছবি থাকলে ছবি, না থাকলে নামের প্রথম অক্ষর দিয়ে অ্যাভাটার বানায় — এই কন্টেন্ট সবসময় একটা
     সাইজ/শেপ-নির্ধারক wrapper-এর ভেতরে বসবে (যেমন .team-avatar, .tm-avatar-wrap), তাই এখানে
-    নিজে থেকে সাইজ/radius সেট করে না — শুধু wrapper পুরোটা fill করে। profile ও nav-chip
-    অ্যাভাটারেও app.js এই একই ফাংশন ব্যবহার করে, যাতে পুরো সাইটে avatar দেখতে একরকম হয়। */
+    নিজে থেকে সাইজ/radius সেট করে না — শুধু wrapper পুরোটা fill করে। প্রোফাইল স্লাইডার ও
+    হেডারের অ্যাভাটারেও একই ফাংশন ব্যবহার হয়, যাতে পুরো সাইটে অ্যাভাটার দেখতে একরকম হয়। */
 export function avatarOrLetter(url, name) {
   return url
     ? `<img class="avatar-img" src="${escapeHtml(url)}" alt="" loading="lazy">`
@@ -29,9 +28,8 @@ export function renderServices(services) {
   if (!services.length) return emptyState("এখনো কোনো সার্ভিস যোগ করা হয়নি।", "settings");
   return services
     .map(
-      (s, i) => `
-    <div class="service-card reveal">
-      <span class="service-num">${String(i + 1).padStart(2, "0")}</span>
+      (s) => `
+    <div class="service-card">
       <div class="service-icon">${icon(s.icon)}</div>
       <h3>${escapeHtml(s.title)}</h3>
       <p>${escapeHtml(s.desc)}</p>
@@ -40,23 +38,31 @@ export function renderServices(services) {
     .join("");
 }
 
+/* পোর্টফোলিওতে ছবি না থাকলে ক্যাটাগরি অনুযায়ী রঙিন কভার দেখায় — কার্ড ফাঁকা লাগে না */
+const CATEGORY_LOOK = {
+  web: { tone: "blue", icon: "globe" },
+  pwa: { tone: "mint", icon: "device" },
+  design: { tone: "violet", icon: "layout" }
+};
+
 export function renderPortfolio(items) {
   if (!items.length) return emptyState("এখনো কোনো পোর্টফোলিও আইটেম যোগ করা হয়নি।", "layout");
   return items
-    .map(
-      (p) => `
-    <div class="pf-card reveal" data-category="${escapeHtml(p.category)}">
+    .map((p) => {
+      const look = CATEGORY_LOOK[p.category] || { tone: "slate", icon: "code" };
+      return `
+    <article class="pf-card tone-${look.tone}" data-category="${escapeHtml(p.category)}">
       ${p.imageUrl
         ? `<div class="pf-media"><img src="${escapeHtml(p.imageUrl)}" alt="" loading="lazy"></div>`
-        : ""}
-      <div class="pf-top">
+        : `<div class="pf-cover"><span class="pf-cover-icon">${icon(look.icon)}</span></div>`}
+      <div class="pf-body">
         <span class="pf-tag">${escapeHtml(p.tag)}</span>
+        <h3>${escapeHtml(p.title)}</h3>
+        <p>${escapeHtml(p.desc)}</p>
       </div>
-      <h3>${escapeHtml(p.title)}</h3>
-      <p>${escapeHtml(p.desc)}</p>
       <div class="pf-meta">${escapeHtml(p.stack)}</div>
-    </div>`
-    )
+    </article>`;
+    })
     .join("");
 }
 
@@ -65,7 +71,7 @@ export function renderCaseStudies(cases) {
   return cases
     .map(
       (c) => `
-    <div class="case-row reveal">
+    <div class="case-row">
       <div>
         <h4>${escapeHtml(c.title)}</h4>
         <p>${escapeHtml(c.desc)}</p>
@@ -82,7 +88,7 @@ export function renderStats(stats) {
   return stats
     .map(
       (s) => `
-    <div class="stat-cell reveal">
+    <div class="stat-cell">
       <b data-count="${Number(s.value) || 0}" data-suffix="${escapeHtml(s.suffix)}">0${escapeHtml(s.suffix)}</b>
       <span>${escapeHtml(s.label)}</span>
     </div>`
@@ -115,7 +121,7 @@ export function renderTeam(team) {
   return team
     .map(
       (m) => `
-    <div class="team-card reveal">
+    <div class="team-card">
       <div class="team-avatar">${avatarOrLetter(m.avatarUrl, m.name)}</div>
       <h4>${escapeHtml(m.name)}</h4>
       <span>${escapeHtml(m.role)}</span>
@@ -129,7 +135,7 @@ export function renderPricing(plans) {
   return plans
     .map(
       (p) => `
-    <div class="price-card reveal${p.featured ? " featured" : ""}">
+    <div class="price-card${p.featured ? " featured" : ""}">
       ${p.featured ? `<span class="price-badge">জনপ্রিয়</span>` : ""}
       <span class="price-plan">${escapeHtml(p.name)}</span>
       <div class="price-amount">${escapeHtml(p.price)}</div>
@@ -147,9 +153,9 @@ export function renderFAQ(items) {
   return items
     .map(
       (f, i) => `
-    <div class="faq-item reveal" data-i="${i}">
-      <button class="faq-q">${escapeHtml(f.q)}${icons.plus}</button>
-      <div class="faq-a"><p>${escapeHtml(f.a)}</p></div>
+    <div class="faq-item" data-i="${i}">
+      <button class="faq-q" aria-expanded="false" aria-controls="faqA${i}"><span>${escapeHtml(f.q)}</span><span class="faq-plus">${icons.plus}</span></button>
+      <div class="faq-a" id="faqA${i}"><div><p>${escapeHtml(f.a)}</p></div></div>
     </div>`
     )
     .join("");
