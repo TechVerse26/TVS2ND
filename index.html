@@ -10,9 +10,10 @@
 <link rel="manifest" href="./manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400..800&family=Hind+Siliguri:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400..800&family=Hind+Siliguri:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="./css/styles.css">
 <link rel="stylesheet" href="./css/drawer.css">
+<link rel="stylesheet" href="./css/footer.css">
 <script>
   (function () {
     try {
@@ -259,24 +260,8 @@
 
 </div><!-- /mainContent -->
 
-<!-- ===== Footer ===== -->
-<footer class="footer">
-  <div class="wrap">
-    <div class="footer-grid">
-      <div class="footer-brand">
-        <a href="#home" class="brand"><img src="./assets/logo.png" alt="TVsite" class="brand-logo"></a>
-        <p>পিওর JavaScript ও CSS দিয়ে তৈরি আধুনিক ওয়েব অ্যাপ, PWA ও Firebase সল্যুশন।</p>
-      </div>
-      <div><h5>সাইট</h5><div class="footer-links"><a href="#services">সার্ভিস</a><a href="#portfolio">পোর্টফোলিও</a><a href="#pricing">প্যাকেজ</a></div></div>
-      <div><h5>কোম্পানি</h5><div class="footer-links"><a href="#team">টিম</a><a href="#faq">প্রশ্নোত্তর</a><a href="#booking">যোগাযোগ</a></div></div>
-      <div><h5>যোগাযোগ</h5><div class="footer-links"><a href="https://wa.me/8801957329211" id="footerWaLink" target="_blank" rel="noopener">WhatsApp</a></div></div>
-    </div>
-    <div class="footer-bottom">
-      <span>© <span id="year"></span> Tech Verse. সর্বস্বত্ব সংরক্ষিত।</span>
-      <span>পিওর JS/CSS দিয়ে তৈরি</span>
-    </div>
-  </div>
-</footer>
+<!-- ===== Footer (js/footer.js রেন্ডার করে — তথ্য js/contact.js-এ) ===== -->
+<footer class="footer" id="siteFooter"></footer>
 
 <!-- ===== WhatsApp float ===== -->
 <div class="wa-tooltip" id="waTooltip">WhatsApp-এ মেসেজ করুন</div>
@@ -361,6 +346,7 @@
   </div>
 </div>
 
+<script type="module" src="./js/site.js"></script>
 <script type="module" src="./js/app.js"></script>
 </body>
 </html>
