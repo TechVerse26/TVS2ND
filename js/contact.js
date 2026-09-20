@@ -20,7 +20,7 @@ export const CONTACT = Object.freeze({
   whatsapp: Object.freeze({
     number: "8801957329211", // দেশের কোডসহ, + বা স্পেস ছাড়া
     display: "+8801957329211",
-    message: "আসসালামু আলাইকুম, আমি Tech Verse থেকে একটা প্রজেক্ট নিয়ে কথা বলতে চাই।"
+    message: "Hello Tech Verse team, I'd like to discuss a project with you." // WhatsApp খুললে এই লেখাটা আগে থেকে বসানো থাকে
   }),
 
   phone: Object.freeze({
@@ -45,6 +45,6 @@ export function telUrl() {
 }
 
 /** ইমেইল লিংক (বিষয় আগে থেকে লেখা) */
-export function mailUrl(address, subject = "Tech Verse-এ যোগাযোগ") {
+export function mailUrl(address, subject = "Enquiry from the Tech Verse website") {
   return `mailto:${address}?subject=${encodeURIComponent(subject)}`;
 }

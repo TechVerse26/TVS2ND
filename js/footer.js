@@ -33,13 +33,13 @@ function contactRows() {
     },
     ...CONTACT.emails.map((m) => ({
       tone: "violet", icon: m.kind === "yahoo" ? icons.yahoo : icons.mail, title: m.address, sub: "Email",
-      href: mailUrl(m.address), copy: m.address, copyLabel: "ইমেইল ঠিকানা", addr: true,
+      href: mailUrl(m.address), copy: m.address, copyLabel: "email address", addr: true,
       // লাইন ভাঙতে হলে @ ও . -এর পরে ভাঙবে (gmail.co|m-এর মতো নয়)
       titleHtml: esc(m.address).replace(/([@.])/g, "$1<wbr>")
     })),
     {
       tone: "slate", icon: icons.phone, title: "Call", sub: CONTACT.phone.local,
-      href: telUrl(), copy: CONTACT.phone.local, copyLabel: "ফোন নম্বর"
+      href: telUrl(), copy: CONTACT.phone.local, copyLabel: "phone number"
     }
   ];
 
@@ -47,9 +47,9 @@ function contactRows() {
     .map((r) => {
       const ext = r.external ? ` target="_blank" rel="noopener noreferrer"` : "";
       const go = r.external ? icons.external.replace("<svg", '<svg class="contact-go"') : "";
-      const hint = r.external ? sr("নতুন ট্যাবে খুলবে") : "";
+      const hint = r.external ? sr("opens in a new tab") : "";
       const copy = r.copy
-        ? `<button type="button" class="contact-copy" data-copy="${esc(r.copy)}" aria-label="${esc(r.copyLabel)} কপি করুন">${icons.copy}</button>`
+        ? `<button type="button" class="contact-copy" data-copy="${esc(r.copy)}" aria-label="Copy ${esc(r.copyLabel)}">${icons.copy}</button>`
         : "";
       return `<li class="contact-item tone-${r.tone}">
         <a class="contact-link" href="${esc(r.href)}"${ext}>
@@ -93,12 +93,13 @@ async function copyText(text) {
 export function renderFooter(el) {
   if (!el) return;
   const year = new Date().getFullYear();
+  el.setAttribute("lang", "en"); // ফুটারের সব লেখা ইংরেজি — স্ক্রিন রিডার ও ফন্ট ঠিকমতো বেছে নেয়
   el.innerHTML = `
     <div class="wrap">
       <div class="footer-grid">
         <div class="footer-brand">
           <a href="#home" class="brand"><img src="./assets/logo.png" alt="TVsite" class="brand-logo"></a>
-          <p>পিওর JavaScript ও CSS দিয়ে তৈরি আধুনিক ওয়েব অ্যাপ, PWA ও Firebase সল্যুশন।</p>
+          <p>We design, build and support modern websites, web apps and digital products — from the first idea to long-term growth.</p>
           <div class="footer-social">
             <a class="social-btn" href="${esc(CONTACT.facebook.url)}" target="_blank" rel="noopener noreferrer" aria-label="Facebook">${icons.facebook}</a>
             <a class="social-btn" href="${esc(CONTACT.youtube.url)}" target="_blank" rel="noopener noreferrer" aria-label="YouTube">${icons.youtube}</a>
@@ -119,7 +120,7 @@ export function renderFooter(el) {
 
       <div class="footer-bottom">
         <span lang="en">© ${year} ${esc(CONTACT.brand)}. All rights reserved.</span>
-        <span>পিওর JS/CSS দিয়ে তৈরি</span>
+        <span lang="en">Fast · Secure · Beautifully crafted</span>
       </div>
     </div>`;
 
@@ -129,6 +130,6 @@ export function renderFooter(el) {
     if (!btn) return;
     const text = btn.dataset.copy;
     const ok = await copyText(text);
-    showToast(ok ? `কপি হয়েছে: ${text}` : "কপি করা যায়নি — নিজে সিলেক্ট করে কপি করুন।", ok ? "success" : "error");
+    showToast(ok ? `Copied: ${text}` : "Couldn't copy — please select the text and copy it manually.", ok ? "success" : "error");
   });
 }

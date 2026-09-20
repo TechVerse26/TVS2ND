@@ -18,8 +18,13 @@ function initWhatsApp() {
   const tip = document.getElementById("waTooltip");
   if (!btn) return;
   if (tip) {
-    btn.addEventListener("mouseenter", () => tip.classList.add("show"));
-    btn.addEventListener("mouseleave", () => tip.classList.remove("show"));
+    const show = () => tip.classList.add("show");
+    const hide = () => tip.classList.remove("show");
+    btn.addEventListener("mouseenter", show);
+    btn.addEventListener("mouseleave", hide);
+    // কীবোর্ডে ট্যাব করে এলে টুলটিপ দেখায় (মাউস-ক্লিকে ফোকাস হলে নয়, নইলে ট্যাব ফেরার পর আটকে থাকত)
+    btn.addEventListener("focus", () => { if (btn.matches(":focus-visible")) show(); });
+    btn.addEventListener("blur", hide);
   }
   // নম্বর ও মেসেজ কোডে (js/contact.js) — Firestore/অ্যাডমিন থেকে নয়
   btn.addEventListener("click", () => window.open(whatsappUrl(), "_blank", "noopener"));
