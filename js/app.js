@@ -88,7 +88,7 @@ function showLoadingSkeletons() {
   if ($("statsStrip")) $("statsStrip").innerHTML = `<div class="skel-row skel" style="height:90px;width:100%;grid-column:1/-1;border-radius:0;"></div>`;
 }
 
-/* ---------------- সেটিংস প্রয়োগ (হিরো টেক্সট, WhatsApp নম্বর, SEO, Code/Course লিংক) ---------------- */
+/* ---------------- সেটিংস প্রয়োগ (হিরো টেক্সট, SEO, Code/Course লিংক) — যোগাযোগের তথ্য এখানে নয়, js/contact.js-এ ---------------- */
 function applySettings(settings) {
   const set = (id, text) => { const el = $(id); if (el && text) el.textContent = text; };
   set("heroEyebrow", settings.heroEyebrow);
@@ -100,9 +100,6 @@ function applySettings(settings) {
 
   const metaDesc = document.querySelector('meta[name="description"]');
   if (metaDesc && settings.seoDescription) metaDesc.setAttribute("content", settings.seoDescription);
-
-  const waLink = $("footerWaLink");
-  if (waLink && settings.whatsappNumber) waLink.href = `https://wa.me/${settings.whatsappNumber}`;
 
   if (drawer) drawer.setSettings(settings);
 }
@@ -175,18 +172,6 @@ function initTestimonials() {
     const n = slides().length;
     if (n > 1 && !document.hidden) show((idx + 1) % n);
   }, 6000);
-}
-
-/* ---------------- WhatsApp float ---------------- */
-function initWhatsApp() {
-  const btn = $("waFloat");
-  const tip = $("waTooltip");
-  btn.addEventListener("mouseenter", () => tip.classList.add("show"));
-  btn.addEventListener("mouseleave", () => tip.classList.remove("show"));
-  btn.addEventListener("click", () => {
-    const msg = encodeURIComponent(siteSettings.whatsappMessage || "");
-    window.open(`https://wa.me/${siteSettings.whatsappNumber}?text=${msg}`, "_blank", "noopener");
-  });
 }
 
 /* ---------------- Auth modal ---------------- */
@@ -503,7 +488,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   // ইন্টারঅ্যাক্টিভ অংশগুলো কন্টেন্টের জন্য অপেক্ষা না করেই চালু — ইন্টারনেট ধীর হলেও বাটন কাজ করবে
   initTheme();
   initPWA();
-  $("year").textContent = new Date().getFullYear();
   initHeroTerminal($("terminalBody"));
   showLoadingSkeletons();
 
@@ -514,13 +498,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
   drawer.setSettings(siteSettings);
 
+  // তথ্য-শিটের "লগইন খুলুন" বাটন (js/site.js ইভেন্ট পাঠায়)
+  document.addEventListener("tv:open-auth", (e) => openAuthModal((e.detail && e.detail.view) || "login"));
+
   initNav();
   initScrollSpy();
   initAuthModal();
   initPortfolioFilter();
   initFAQ();
   initTestimonials();
-  initWhatsApp();
   initBookingForm();
   renderNavAuthArea();
 

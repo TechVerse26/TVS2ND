@@ -14,8 +14,6 @@ export const defaultSettings = {
   heroCtaPrimary: "প্রজেক্ট শুরু করুন",
   heroCtaSecondary: "পোর্টফোলিও দেখুন",
   seoDescription: "Tech Verse — পিওর JavaScript ও CSS দিয়ে তৈরি আধুনিক ওয়েব অ্যাপ, PWA ও Firebase-ভিত্তিক ব্যাকএন্ড সল্যুশন।",
-  whatsappNumber: "8801957329211",
-  whatsappMessage: "আসসালামু আলাইকুম, আমি Tech Verse থেকে একটা প্রজেক্ট নিয়ে কথা বলতে চাই।",
   // প্রোফাইল স্লাইডারের "Code" ও "Course" বাটনের লিংক (আপনার অন্য দুটো ওয়েবসাইট)।
   // এখানে সরাসরি বসাতে পারেন, অথবা অ্যাডমিন প্যানেল → সেটিংস থেকে — সেখানে বসালে সেটাই কার্যকর হবে।
   codeUrl: "",

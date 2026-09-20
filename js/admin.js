@@ -605,7 +605,7 @@ function bindUserEvents(list) {
 /* ================= Settings ================= */
 
 async function renderSettings(page) {
-  page.innerHTML = pageHeadHtml("সেটিংস", "সাইটের হিরো টেক্সট, হোয়াটসঅ্যাপ নম্বর ও প্রোফাইল স্লাইডারের লিংক এখান থেকে পরিবর্তন করুন।") +
+  page.innerHTML = pageHeadHtml("সেটিংস", "সাইটের হিরো টেক্সট ও প্রোফাইল স্লাইডারের লিংক এখান থেকে পরিবর্তন করুন। (ফুটারের যোগাযোগের তথ্য — ফোন, ইমেইল, WhatsApp, Facebook, YouTube — কোডে আছে: js/contact.js।)") +
     `<div id="settingsArea">${skeletonFormHtml()}</div>`;
 
   let current = { ...seed.defaultSettings };
@@ -621,8 +621,6 @@ async function renderSettings(page) {
     { key: "heroSubtitle", label: "হিরো সাবটাইটেল", type: "textarea" },
     { key: "heroCtaPrimary", label: "প্রধান বাটনের টেক্সট" },
     { key: "heroCtaSecondary", label: "দ্বিতীয় বাটনের টেক্সট" },
-    { key: "whatsappNumber", label: "হোয়াটসঅ্যাপ নম্বর", hint: "দেশের কোডসহ, + বা স্পেস ছাড়া — যেমন 8801XXXXXXXXX" },
-    { key: "whatsappMessage", label: "হোয়াটসঅ্যাপ ডিফল্ট মেসেজ", type: "textarea" },
     { key: "seoDescription", label: "SEO বিবরণ (মেটা ট্যাগ)", type: "textarea" }
   ];
 
