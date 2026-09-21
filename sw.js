@@ -35,8 +35,8 @@ const SHELL_FILES = [
 // ফ্যাভিকন/অ্যাপ আইকন (assets/icons/) আলাদাভাবে ক্যাশ হয় — কোনো আইকন ফাইল না থাকলেও বাকি শেল ক্যাশ হতে বাধা পায় না
 const ICON_FILES = [
   "./assets/icons/favicon.ico",
-  "./assets/icons/favicon-32x32.png",
-  "./assets/icons/favicon-16x16.png",
+  "./assets/icons/favicon-64x64.png",
+  "./assets/icons/favicon-48x48.png",
   "./assets/icons/apple-touch-icon.png"
 ];
 
