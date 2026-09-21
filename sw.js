@@ -3,7 +3,7 @@
 // কৌশল: নিজের সাইটের ফাইল (HTML/CSS/JS) আগে নেটওয়ার্ক থেকে আনে (তাই ডিজাইন/কোড আপডেট করলে ইউজার সাথে সাথেই
 // নতুনটা পায়), নেটওয়ার্ক না থাকলে ক্যাশ থেকে দেয়। Firebase SDK ও ফন্টের মতো ভার্সন-করা বাইরের ফাইল ক্যাশ-ফার্স্ট।
 // Firestore/Auth API রিকোয়েস্ট কখনো ক্যাশ হয় না।
-const CACHE_NAME = "techverse-shell-v6";
+const CACHE_NAME = "techverse-shell-v7";
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -32,9 +32,20 @@ const SHELL_FILES = [
   "./assets/logo.png"
 ];
 
+// ফ্যাভিকন/অ্যাপ আইকন (assets/icons/) আলাদাভাবে ক্যাশ হয় — কোনো আইকন ফাইল না থাকলেও বাকি শেল ক্যাশ হতে বাধা পায় না
+const ICON_FILES = [
+  "./assets/icons/favicon.ico",
+  "./assets/icons/favicon-32x32.png",
+  "./assets/icons/favicon-16x16.png",
+  "./assets/icons/apple-touch-icon.png"
+];
+
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_FILES)).catch(() => {})
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await cache.addAll(SHELL_FILES).catch(() => {});
+      await Promise.all(ICON_FILES.map((f) => cache.add(f).catch(() => {})));
+    }).catch(() => {})
   );
   self.skipWaiting();
 });
