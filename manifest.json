@@ -1,6 +1,6 @@
 {
   "name": "Tech Verse — Web and PWA Development Agency",
-  "short_name": "Tech Verse",
+  "short_name": "TVsites",
   "description": "We specialize in developing all types of modern and professional websites, including e-commerce, educational platforms, healthcare and doctor websites, business websites, portfolio sites, and more. We also provide PWA (Progressive Web App) conversion with full offline support, allowing websites to work smoothly even without an internet connection. From design and development to PWA conversion and offline functionality, we build complete, modern, and reliable web solutions tailored to your needs.",
   "start_url": "./index.html",
   "scope": "./",
