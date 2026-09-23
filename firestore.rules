@@ -303,17 +303,39 @@ match /counters/{counterId} {
        ===================================================================== */
 
     /* ---------- বুকিং ফর্মের অনুরোধ ----------
-       create: যে কেউ (লগইন ছাড়াও) জমা দিতে পারবে, কিন্তু দুটো জিনিস জোর করে যাচাই হয়:
-       (ক) uid ফিল্ড থাকলে সেটা null (অ্যানোনিমাস) বা নিজের auth.uid-ই হতে হবে —
-           অন্য কারো uid বসিয়ে তার নামে বুকিং তৈরি করা যাবে না;
-       (খ) status ফিল্ড থাকলে সেটা অবশ্যই "নতুন" দিয়েই শুরু হতে হবে (app.js এই মানই
-           পাঠায়) — কেউ নিজে থেকে সরাসরি "সম্পন্ন"/অন্য স্ট্যাটাস বসিয়ে জমা দিতে পারবে না। */
+       create: যে কেউ (লগইন ছাড়াও) জমা দিতে পারবে, কিন্তু এখন এগুলো জোর করে যাচাই হয় (App Check-এর
+       পাশাপাশি স্প্যাম/জাঙ্ক ডকুমেন্ট ঠেকানোর দ্বিতীয় স্তর হিসেবে):
+       (ক) uid ফিল্ড থাকলে সেটা null (অ্যানোনিমাস) বা নিজের auth.uid-ই হতে হবে;
+       (খ) status ফিল্ড থাকলে সেটা অবশ্যই "নতুন" দিয়েই শুরু হতে হবে;
+       (গ) createdAt অবশ্যই সার্ভার-টাইমস্ট্যাম্প হতে হবে (request.time-এর সমান) — app.js
+           এমনিতেই serverTimestamp() পাঠায়, তাই এটা স্বাভাবিক ব্যবহারে কিছু ভাঙে না, শুধু কেউ
+           সরাসরি SDK কল করে ভুয়া তারিখ বসাতে চাইলে সেটা আটকায়;
+       (ঘ) name/email/service আবশ্যক, টাইপ+দৈর্ঘ্য নির্দিষ্ট, ইমেইল মোটামুটি ইমেইল-আকৃতির;
+       (ঙ) phone/budget/timeline/details ঐচ্ছিক কিন্তু থাকলে অবশ্যই string ও যুক্তিসঙ্গত দৈর্ঘ্যে —
+           কেউ যেন একটা ফিল্ডে মেগাবাইট-সাইজের জাঙ্ক টেক্সট বা ভুল টাইপ (number/map/array) বসিয়ে
+           দিতে না পারে। */
     match /bookings/{bookingId} {
       allow create: if
         (!('uid' in request.resource.data) ||
           request.resource.data.uid == null ||
           (isSignedIn() && request.resource.data.uid == request.auth.uid)) &&
-        (!('status' in request.resource.data) || request.resource.data.status == "নতুন");
+        (!('status' in request.resource.data) || request.resource.data.status == "নতুন") &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120 &&
+        request.resource.data.email is string &&
+        request.resource.data.email.size() <= 200 &&
+        request.resource.data.email.matches('^[^@]+@[^@]+\\.[^@]+$') &&
+        request.resource.data.service is string &&
+        request.resource.data.service.size() > 0 && request.resource.data.service.size() <= 200 &&
+        (!('phone' in request.resource.data) ||
+          (request.resource.data.phone is string && request.resource.data.phone.size() <= 30)) &&
+        (!('budget' in request.resource.data) ||
+          (request.resource.data.budget is string && request.resource.data.budget.size() <= 100)) &&
+        (!('timeline' in request.resource.data) ||
+          (request.resource.data.timeline is string && request.resource.data.timeline.size() <= 100)) &&
+        (!('details' in request.resource.data) ||
+          (request.resource.data.details is string && request.resource.data.details.size() <= 3000));
 
       allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
       allow update, delete: if isAdmin();

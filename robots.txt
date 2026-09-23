@@ -1,0 +1,8 @@
+# robots.txt — Tech Verse
+# ⚠️ sitemap লাইনের ডোমেইনটা তোমার আসল ডিপ্লয়েড ডোমেইন দিয়ে বদলে নিও (নিচে দেখো)
+
+User-agent: *
+Allow: /
+Disallow: /admin.html
+
+Sitemap: https://tvsaccount.web.app/sitemap.xml

@@ -3,7 +3,7 @@
 // কৌশল: নিজের সাইটের ফাইল (HTML/CSS/JS) আগে নেটওয়ার্ক থেকে আনে (তাই ডিজাইন/কোড আপডেট করলে ইউজার সাথে সাথেই
 // নতুনটা পায়), নেটওয়ার্ক না থাকলে ক্যাশ থেকে দেয়। Firebase SDK ও ফন্টের মতো ভার্সন-করা বাইরের ফাইল ক্যাশ-ফার্স্ট।
 // Firestore/Auth API রিকোয়েস্ট কখনো ক্যাশ হয় না।
-const CACHE_NAME = "techverse-shell-v8";
+const CACHE_NAME = "techverse-shell-v9";
 const SHELL_FILES = [
   "./",
   "./index.html",
@@ -29,7 +29,7 @@ const SHELL_FILES = [
   "./js/auth.js",
   "./js/firebase-config.js",
   "./manifest.json",
-  "./assets/logo.png"
+  "./assets/logo.svg"
 ];
 
 // ফ্যাভিকন/অ্যাপ আইকন (assets/icons/) আলাদাভাবে ক্যাশ হয় — কোনো আইকন ফাইল না থাকলেও বাকি শেল ক্যাশ হতে বাধা পায় না
@@ -40,10 +40,14 @@ const ICON_FILES = [
   "./assets/icons/apple-touch-icon.png"
 ];
 
+// আগে cache.addAll(SHELL_FILES) একসাথে সব ফাইল আনত — লিস্টে একটা ফাইলের নামও ভুল/মিসিং হলে
+// (যেমন আগে logo.png রেফার করা ছিল যেটা আসলে ছিল না) পুরো addAll() ব্যর্থ হতো এবং একটাও ফাইল
+// ক্যাশ হতো না (all-or-nothing আচরণ)। তাই এখন ICON_FILES-এর মতোই প্রতিটা ফাইল আলাদাভাবে cache.add()
+// করা হয় — কোনো একটা ফাইল ৪০৪/মিসিং হলেও বাকি সব ঠিকমতো ক্যাশ হবে, অফলাইন সাপোর্ট চুপচাপ পুরো ভেঙে যাবে না।
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
-      await cache.addAll(SHELL_FILES).catch(() => {});
+      await Promise.all(SHELL_FILES.map((f) => cache.add(f).catch(() => {})));
       await Promise.all(ICON_FILES.map((f) => cache.add(f).catch(() => {})));
     }).catch(() => {})
   );
@@ -71,8 +75,15 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  // Firebase/Google API রিকোয়েস্ট ক্যাশ না করে সরাসরি নেটওয়ার্কে পাঠানো হয়
-  if (url.origin.includes("googleapis") || url.origin.includes("firebase")) return;
+  // Firebase/Google API রিকোয়েস্ট ক্যাশ না করে সরাসরি নেটওয়ার্কে পাঠানো হয়। App Check-এর
+  // reCAPTCHA স্ক্রিপ্ট (www.google.com/recaptcha/…, www.gstatic.com/recaptcha/…) আর Google
+  // সাইন-ইনের ডোমেইনও এখানে যোগ, যাতে এগুলো কখনো পুরোনো ক্যাশ থেকে না আসে।
+  if (
+    url.origin.includes("googleapis") ||
+    url.origin.includes("firebase") ||
+    url.hostname.endsWith("google.com") ||
+    url.pathname.includes("/recaptcha/")
+  ) return;
 
   if (url.origin === self.location.origin) {
     // নিজের ফাইল: নেটওয়ার্ক-ফার্স্ট

@@ -5,8 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Tech Verse — আধুনিক ওয়েব ও PWA ডেভেলপমেন্ট এজেন্সি</title>
 <meta name="description" content="Tech Verse — পিওর JavaScript ও CSS দিয়ে তৈরি আধুনিক ওয়েব অ্যাপ, PWA ও Firebase-ভিত্তিক ব্যাকএন্ড সল্যুশন।">
+
+<!-- ⚠️ ডোমেইন বদলাও: নিচের সব https://tvsaccount.web.app/ — এখানে তোমার আসল ডিপ্লয়েড ডোমেইন বসাও
+     (কাস্টম ডোমেইন থাকলে সেটা, নাহলে ডিফল্ট Firebase Hosting ঠিকানা tvsaccount.web.app ধরে নেওয়া হয়েছে) -->
+<link rel="canonical" href="https://tvsaccount.web.app/">
+
+<!-- Open Graph — ফেসবুক/লিংকডইন/হোয়াটসঅ্যাপে লিংক শেয়ার করলে সুন্দর প্রিভিউ কার্ড দেখাবে -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://tvsaccount.web.app/">
+<meta property="og:site_name" content="Tech Verse">
+<meta property="og:title" content="Tech Verse — আধুনিক ওয়েব ও PWA ডেভেলপমেন্ট এজেন্সি">
+<meta property="og:description" content="পিওর JavaScript ও CSS দিয়ে তৈরি আধুনিক ওয়েব অ্যাপ, PWA ও Firebase-ভিত্তিক ব্যাকএন্ড সল্যুশন।">
+<meta property="og:image" content="https://tvsaccount.web.app/assets/icons/android-chrome-512x512.png">
+<meta property="og:image:width" content="512">
+<meta property="og:image:height" content="512">
+<meta property="og:locale" content="bn_BD">
+
+<!-- Twitter/X কার্ড -->
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Tech Verse — আধুনিক ওয়েব ও PWA ডেভেলপমেন্ট এজেন্সি">
+<meta name="twitter:description" content="পিওর JavaScript ও CSS দিয়ে তৈরি আধুনিক ওয়েব অ্যাপ, PWA ও Firebase-ভিত্তিক ব্যাকএন্ড সল্যুশন।">
+<meta name="twitter:image" content="https://tvsaccount.web.app/assets/icons/android-chrome-512x512.png">
+
 <meta name="theme-color" content="#F6F9FD" id="metaThemeColor">
-<!-- ফ্যাভিকন ও অ্যাপ আইকন — লোগো প্যাক: assets/icons/ (হেডার/ফুটারের টেক্সট লোগো assets/logo.png আলাদা, ওটা অক্ষত) -->
+<!-- ফ্যাভিকন ও অ্যাপ আইকন — লোগো প্যাক: assets/icons/ (হেডার/ফুটারের ব্র্যান্ড লোগো assets/logo.svg — একই ফাইল সব জায়গায় ব্যবহার হয়, আলাদা .png নেই) -->
 <link rel="icon" href="./assets/icons/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="./assets/icons/favicon-64x64.png">
 <link rel="icon" type="image/png" sizes="16x16" href="./assets/icons/favicon-48x48.png">
@@ -25,6 +47,25 @@
       if (saved === "light" || saved === "dark") document.documentElement.setAttribute("data-theme", saved);
     } catch (e) {}
   })();
+</script>
+
+<!-- JSON-LD: Google-কে সরাসরি জানায় এটা কোন প্রতিষ্ঠান — নাম্বার/ইমেইল/সোশ্যাল js/contact.js থেকে
+     হুবহু কপি করা; contact.js বদলালে এখানেও মিলিয়ে বদলে নিও -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  "name": "Tech Verse",
+  "url": "https://tvsaccount.web.app/",
+  "logo": "https://tvsaccount.web.app/assets/logo.svg",
+  "description": "পিওর JavaScript ও CSS দিয়ে তৈরি আধুনিক ওয়েব অ্যাপ, PWA ও Firebase-ভিত্তিক ব্যাকএন্ড সল্যুশন।",
+  "email": "tv.support.info@gmail.com",
+  "telephone": "+8801957329211",
+  "sameAs": [
+    "https://www.facebook.com/irnahmed360",
+    "https://www.youtube.com/@imran.ahmedd"
+  ]
+}
 </script>
 </head>
 <body>
@@ -212,6 +253,13 @@
           </div>
         </aside>
         <form class="book-form" id="bookingForm" novalidate>
+          <!-- হানিপট: আসল ইউজার এটা দেখতেও পাবে না, ট্যাব করেও পৌঁছাবে না — কিন্তু সাধারণ স্প্যাম
+               বট যেকোনো ফর্ম পেলেই সব ইনপুট অন্ধভাবে পূরণ করে, তখন এটাও ভরে ফেলে। app.js-এ চেক
+               করে এই ঘর ভরা থাকলে সাবমিট চুপচাপ বাদ দেওয়া হয় (বটকে বোঝানো হয় না যে ধরা পড়েছে)। -->
+          <div style="position:absolute;left:-9999px;top:-9999px;height:0;width:0;overflow:hidden;" aria-hidden="true">
+            <label for="bCompanySite">Company website</label>
+            <input type="text" id="bCompanySite" name="company_website" tabindex="-1" autocomplete="off">
+          </div>
           <div class="step-track" aria-hidden="true"><span class="done"><i>1</i>সার্ভিস ও যোগাযোগ</span><span><i>2</i>প্রজেক্টের বিবরণ</span></div>
 
           <div class="form-step active" data-step="0">
