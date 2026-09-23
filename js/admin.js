@@ -182,7 +182,7 @@ function shellHtml() {
     <div class="admin-shell">
       <div class="admin-sidebar-scrim" id="sidebarScrim"></div>
       <aside class="admin-sidebar" id="sidebar">
-        <div class="admin-brand"><img src="./assets/logo.png" alt="TVsite" class="brand-logo"></div>
+        <div class="admin-brand"><img src="./assets/logo.svg" alt="TVsite" class="brand-logo"></div>
         <nav class="admin-nav" id="adminNav">${navHtml()}</nav>
         <div class="admin-sidebar-foot">
           <a href="./index.html">${icons.back}<span>সাইটে ফিরুন</span></a>

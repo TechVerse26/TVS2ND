@@ -380,6 +380,10 @@ function initBookingForm() {
   const steps = Array.from(form.querySelectorAll(".form-step"));
   const trackEls = Array.from(form.querySelectorAll(".step-track > span"));
   let step = 0;
+  // পেজ লোড হওয়ার কত পরে সাবমিট হলো — রিয়েল ইউজার ফর্ম পড়ে, ধাপ পাল্টে, টাইপ করে তারপর
+  // সাবমিট করে; স্ক্রিপ্ট/বট প্রায় সাথে সাথেই সাবমিট করে ফেলে। নিচে submit হ্যান্ডলারের
+  // anti-spam চেকে honeypot-এর পাশাপাশি এটাও ব্যবহার হয়।
+  const formLoadedAt = Date.now();
 
   const chosenService = () => {
     const btn = form.querySelector("#servicePills button.active");
@@ -426,6 +430,20 @@ function initBookingForm() {
     // প্রথম ধাপে Enter চাপলে সরাসরি জমা না দিয়ে পরের ধাপে যাওয়া
     if (step < steps.length - 1) { goNext(); return; }
     if (!stepIsValid(0)) { show(0); return; }
+
+    // --- anti-spam: honeypot + ন্যূনতম সময় ---
+    // দুটোর যেকোনো একটা ট্রিগার করলে চুপচাপ "পাঠানো হয়েছে" দেখিয়ে থেমে যাও — Firestore-এ
+    // কিছু লেখা হয় না, আর বট/স্ক্রিপ্টকেও বোঝানো হয় না যে ধরা পড়েছে (তাহলে সহজে পাল্টে ফেলবে)।
+    const isLikelyBot = (form.company_website && form.company_website.value.trim()) || (Date.now() - formLoadedAt < 1500);
+    if (isLikelyBot) {
+      showToast("অনুরোধ পাঠানো হয়েছে! শীঘ্রই যোগাযোগ করা হবে।");
+      form.reset();
+      buildServicePills();
+      show(0);
+      prefillBooking();
+      return;
+    }
+
     const submitBtn = form.querySelector("button[type=submit]");
     submitBtn.disabled = true;
     submitBtn.textContent = "পাঠানো হচ্ছে...";

@@ -98,7 +98,7 @@ export function renderFooter(el) {
     <div class="wrap">
       <div class="footer-grid">
         <div class="footer-brand">
-          <a href="#home" class="brand"><img src="./assets/logo.png" alt="TVsite" class="brand-logo"></a>
+          <a href="#home" class="brand"><img src="./assets/logo.svg" alt="TVsite" class="brand-logo"></a>
           <p>We design, build and support modern websites, web apps and digital products — from the first idea to long-term growth.</p>
           <div class="footer-social">
             <a class="social-btn" href="${esc(CONTACT.facebook.url)}" target="_blank" rel="noopener noreferrer" aria-label="Facebook">${icons.facebook}</a>
