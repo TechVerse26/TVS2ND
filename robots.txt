@@ -5,4 +5,4 @@ User-agent: *
 Allow: /
 Disallow: /admin.html
 
-Sitemap: https://tvsaccount.web.app/sitemap.xml
+Sitemap: https://tvsites.vercel.app/sitemap.xml
