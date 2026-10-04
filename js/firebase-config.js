@@ -12,13 +12,13 @@ import { initializeAppCheck, ReCaptchaV3Provider } from "https://www.gstatic.com
 
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyA33aia52cAM2n-W6IvuaTdBtdcy0xh-qQ",
-  authDomain: "tvsaccount.firebaseapp.com",
-  projectId: "tvsaccount",
-  storageBucket: "tvsaccount.firebasestorage.app",
-  messagingSenderId: "923190024339",
-  appId: "1:923190024339:web:fede554f57feac35e91566",
-  measurementId: "G-GXJR3YEBMS"
+  apiKey: "AIzaSyByM5MS4XLyTlKKpNNqN3NKNWGou6gxbLM",
+  authDomain: "tvsitesofficial.firebaseapp.com",
+  projectId: "tvsitesofficial",
+  storageBucket: "tvsitesofficial.firebasestorage.app",
+  messagingSenderId: "349423729568",
+  appId: "1:349423729568:web:44e89e67ad08ced5c542c5",
+  measurementId: "G-GM4WFSMWGN"
 };
 
 export const app = initializeApp(firebaseConfig);
