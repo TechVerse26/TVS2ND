@@ -21,9 +21,9 @@ import {
 import { escapeHtml, parseAccent, pickAvatar } from "./utils.js";
 import { createDrawer } from "./drawer.js";
 import { lockScroll, unlockScroll } from "./scrolllock.js";
-import { db } from "./firebase-config.js";
+import { tvCol } from "./tv-db.js";
 import {
-  collection, addDoc, serverTimestamp
+  addDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 let currentUser = null;
@@ -448,7 +448,7 @@ function initBookingForm() {
     submitBtn.disabled = true;
     submitBtn.textContent = "পাঠানো হচ্ছে...";
     try {
-      await addDoc(collection(db, "bookings"), {
+      await addDoc(tvCol("bookings"), {
         service: chosenService(),
         name: form.bName.value.trim(),
         email: form.bEmail.value.trim(),

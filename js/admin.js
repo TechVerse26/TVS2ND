@@ -11,8 +11,9 @@
 // তাই ওখানে escapeHtml() আরও বেশি জরুরি — XSS ঠেকাতে।
 
 import { db } from "./firebase-config.js";
+import { tvCol, tvDoc } from "./tv-db.js";
 import {
-  collection, doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, setDoc,
+  doc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, setDoc,
   query, orderBy, limit, where, getCountFromServer, writeBatch
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { watchAuthState, logout, getUserProfile, isAdminProfile } from "./auth.js";
@@ -20,6 +21,8 @@ import { icons, icon, serviceIconChoices } from "./icons.js";
 import { showToast } from "./toast.js";
 import { escapeHtml, formatDate, debounce, BOOKING_STATUSES, statusClass, safeUrl } from "./utils.js";
 import * as seed from "./seed-data.js";
+import { renderCommunity } from "./admin-community.js";
+import { countOpenReports } from "./community/api.js";
 
 const SEED_MAP = {
   services: seed.services,
@@ -123,7 +126,7 @@ const CONTENT_TYPES = {
 const CONTENT_ORDER = Object.keys(CONTENT_TYPES);
 
 const ROUTE_TITLES = {
-  dashboard: "ড্যাশবোর্ড", bookings: "বুকিং/অনুরোধ", users: "ইউজার", settings: "সেটিংস",
+  dashboard: "ড্যাশবোর্ড", bookings: "বুকিং/অনুরোধ", community: "কমিউনিটি মডারেশন", users: "ইউজার", settings: "সেটিংস",
   ...Object.fromEntries(CONTENT_ORDER.map((k) => [k, CONTENT_TYPES[k].label]))
 };
 
@@ -205,6 +208,7 @@ function navHtml() {
   return `
     ${item("dashboard", "dashboard", "ড্যাশবোর্ড")}
     ${item("bookings", "inbox", "বুকিং/অনুরোধ")}
+    ${item("community", "chat", "কমিউনিটি মডারেশন")}
     <div class="admin-nav-label">কন্টেন্ট ম্যানেজমেন্ট</div>
     ${CONTENT_ORDER.map((k) => item(k, CONTENT_TYPES[k].icon, CONTENT_TYPES[k].label)).join("")}
     <div class="admin-nav-label">অ্যাকাউন্ট</div>
@@ -226,7 +230,7 @@ function closeSidebarMobile() {
 
 function route() {
   const hash = (window.location.hash || "#dashboard").replace("#", "");
-  const valid = hash === "dashboard" || hash === "bookings" || hash === "users" || hash === "settings" || CONTENT_TYPES[hash];
+  const valid = hash === "dashboard" || hash === "bookings" || hash === "community" || hash === "users" || hash === "settings" || CONTENT_TYPES[hash];
   const r = valid ? hash : "dashboard";
   document.querySelectorAll("#adminNav a").forEach((a) => a.classList.toggle("active", a.dataset.route === r));
   const topTitle = document.getElementById("topbarTitle");
@@ -236,6 +240,7 @@ function route() {
   page.innerHTML = "";
   if (r === "dashboard") renderDashboard(page);
   else if (r === "bookings") renderBookings(page);
+  else if (r === "community") renderCommunity(page, { pageHeadHtml, confirmAction, skeletonTableHtml, uid: currentUid });
   else if (r === "users") renderUsers(page);
   else if (r === "settings") renderSettings(page);
   else renderContentList(page, r);
@@ -289,7 +294,7 @@ function confirmAction(message, onConfirm, confirmLabel = "মুছে ফে�
 
 async function countOf(name, whereArgs) {
   try {
-    const ref = collection(db, name);
+    const ref = tvCol(name);
     const q = whereArgs ? query(ref, where(...whereArgs)) : ref;
     const snap = await getCountFromServer(q);
     return snap.data().count;
@@ -305,10 +310,11 @@ async function renderDashboard(page) {
   page.innerHTML = pageHeadHtml("ড্যাশবোর্ড", "আপনার সাইটের একটা সংক্ষিপ্ত চিত্র।") +
     `<div id="dashArea">${skeletonStatsHtml()}${skeletonTableHtml()}</div>`;
 
-  const [totalBookings, newBookings, totalUsers, ...contentCounts] = await Promise.all([
+  const [totalBookings, newBookings, totalUsers, openReports, ...contentCounts] = await Promise.all([
     countOf("bookings"),
     countOf("bookings", ["status", "==", "নতুন"]),
     countOf("users"),
+    countOpenReports().catch(() => 0),
     ...CONTENT_ORDER.map((k) => countOf(k))
   ]);
   const contentTotal = contentCounts.reduce((a, b) => a + b, 0);
@@ -323,6 +329,7 @@ async function renderDashboard(page) {
       <div class="admin-stat"><b>${totalUsers}</b><span>নিবন্ধিত ইউজার</span></div>
       <div class="admin-stat"><b>${contentTotal}</b><span>কন্টেন্ট আইটেম</span></div>
     </div>
+    ${openReports ? `<div class="admin-card"><h3>কমিউনিটি রিপোর্ট</h3><p>${openReports}টা রিপোর্ট রিভিউয়ের অপেক্ষায় আছে।</p><a href="#community" class="btn btn-outline btn-sm">মডারেশনে যান</a></div>` : ""}
     ${emptyTypes.length ? seedCardHtml(emptyTypes) : ""}
     <div class="admin-card">
       <h3>কন্টেন্ট ওভারভিউ</h3>
@@ -369,12 +376,12 @@ async function runSeed(emptyTypes) {
     const batch = writeBatch(db);
     emptyTypes.forEach((key) => {
       (SEED_MAP[key] || []).forEach((item) => {
-        const ref = doc(collection(db, key));
+        const ref = doc(tvCol(key));
         batch.set(ref, item);
       });
     });
-    const settingsSnap = await getDoc(doc(db, "settings", "site"));
-    if (!settingsSnap.exists()) batch.set(doc(db, "settings", "site"), seed.defaultSettings);
+    const settingsSnap = await getDoc(tvDoc("settings", "site"));
+    if (!settingsSnap.exists()) batch.set(tvDoc("settings", "site"), seed.defaultSettings);
     await batch.commit();
     showToast("ডিফল্ট কন্টেন্ট বসানো হয়েছে।");
     renderDashboard(document.getElementById("page"));
@@ -387,7 +394,7 @@ async function runSeed(emptyTypes) {
 
 async function fetchRecentBookings(n) {
   try {
-    const q = query(collection(db, "bookings"), orderBy("createdAt", "desc"), limit(n));
+    const q = query(tvCol("bookings"), orderBy("createdAt", "desc"), limit(n));
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
@@ -417,7 +424,7 @@ async function renderBookings(page) {
 
   let all = [];
   try {
-    const q = query(collection(db, "bookings"), orderBy("createdAt", "desc"), limit(300));
+    const q = query(tvCol("bookings"), orderBy("createdAt", "desc"), limit(300));
     const snap = await getDocs(q);
     all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
@@ -511,7 +518,7 @@ function openBookingDetail(b) {
     const btn = document.getElementById("bSave");
     btn.disabled = true;
     try {
-      await updateDoc(doc(db, "bookings", b.id), { status: document.getElementById("bStatus").value });
+      await updateDoc(tvDoc("bookings", b.id), { status: document.getElementById("bStatus").value });
       showToast("স্ট্যাটাস আপডেট হয়েছে।");
       closeModal();
       renderBookings(document.getElementById("page"));
@@ -524,7 +531,7 @@ function openBookingDetail(b) {
   document.getElementById("bDelete").onclick = () => {
     confirmAction(`"${escapeHtml(b.name || "এই")}"-এর অনুরোধটা মুছে ফেলতে চান? এই কাজ আর ফেরানো যাবে না।`, async () => {
       try {
-        await deleteDoc(doc(db, "bookings", b.id));
+        await deleteDoc(tvDoc("bookings", b.id));
         showToast("অনুরোধ মুছে ফেলা হয়েছে।");
         renderBookings(document.getElementById("page"));
       } catch (err) {
@@ -543,7 +550,7 @@ async function renderUsers(page) {
 
   let list = [];
   try {
-    const q = query(collection(db, "users"), orderBy("createdAt", "desc"));
+    const q = query(tvCol("users"), orderBy("createdAt", "desc"));
     const snap = await getDocs(q);
     list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
@@ -561,19 +568,22 @@ async function renderUsers(page) {
 function roleActionLabel(isAdmin) {
   return isAdmin ? "অ্যাডমিন বাদ দিন" : "অ্যাডমিন করুন";
 }
+const blockLabel = (u) => (u.communityBlocked === true ? "কমিউনিটি ব্লক খুলুন" : "কমিউনিটি ব্লক");
 function userTableHtml(list) {
   const rows = list.map((u) => `
     <tr>
       <td><div class="cell-title">${escapeHtml(u.name || "নাম নেই")}</div><div class="cell-muted">${escapeHtml(u.email || "")}</div></td>
       <td class="cell-muted">${escapeHtml(u.phone || "—")}</td>
-      <td>${u.isAdmin === true ? `<span class="role-badge">অ্যাডমিন</span>` : `<span class="cat-badge">সাধারণ ইউজার</span>`}</td>
-      <td class="cell-actions"><button class="btn ${u.isAdmin === true ? "btn-danger-ghost" : "btn-outline"} btn-sm" data-toggle="${u.id}">${roleActionLabel(u.isAdmin === true)}</button></td>
+      <td>${u.isAdmin === true ? `<span class="role-badge">অ্যাডমিন</span>` : `<span class="cat-badge">সাধারণ ইউজার</span>`}${u.communityBlocked === true ? ` <span class="status-badge st-cancelled">কমিউনিটি ব্লক</span>` : ""}</td>
+      <td class="cell-actions"><button class="btn ${u.isAdmin === true ? "btn-danger-ghost" : "btn-outline"} btn-sm" data-toggle="${u.id}">${roleActionLabel(u.isAdmin === true)}</button>
+        <button class="btn btn-ghost btn-sm" data-block="${u.id}">${blockLabel(u)}</button></td>
     </tr>`).join("");
   const cards = list.map((u) => `
     <div class="admin-list-card">
       <div class="admin-list-card-top"><b>${escapeHtml(u.name || "নাম নেই")}</b>${u.isAdmin === true ? `<span class="role-badge">অ্যাডমিন</span>` : ""}</div>
       <p>${escapeHtml(u.email || "")}${u.phone ? " · " + escapeHtml(u.phone) : ""}</p>
       <button class="btn ${u.isAdmin === true ? "btn-danger-ghost" : "btn-outline"} btn-sm" data-toggle="${u.id}">${roleActionLabel(u.isAdmin === true)}</button>
+      <button class="btn btn-ghost btn-sm" data-block="${u.id}">${blockLabel(u)}</button>
     </div>`).join("");
   return `<div class="admin-table-wrap"><table class="admin-table"><thead><tr><th>ইউজার</th><th>ফোন</th><th>রোল</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="admin-mobile-list">${cards}</div>`;
@@ -581,6 +591,24 @@ function userTableHtml(list) {
 
 function bindUserEvents(list) {
   document.getElementById("userArea").addEventListener("click", (e) => {
+    const blockBtn = e.target.closest("[data-block]");
+    if (blockBtn) {
+      const u = list.find((x) => x.id === blockBtn.dataset.block);
+      if (!u) return;
+      const blocking = u.communityBlocked !== true;
+      const who = escapeHtml(u.name || u.email || "এই ইউজার");
+      confirmAction(blocking ? `"${who}"-কে কমিউনিটিতে পোস্ট/রিপ্লাই/লাইক/রিপোর্ট করা থেকে সীমিত করতে চান? (সাইটের বাকি অংশ ব্যবহার করতে পারবেন)` : `"${who}"-এর কমিউনিটি অ্যাক্সেস আবার চালু করতে চান?`, async () => {
+        try {
+          await updateDoc(tvDoc("users", u.id), { communityBlocked: blocking });
+          showToast("আপডেট হয়েছে।");
+          renderUsers(document.getElementById("page"));
+        } catch (err) {
+          console.error(err);
+          showToast("আপডেট করতে সমস্যা হয়েছে।", "error");
+        }
+      }, blocking ? "ব্লক করুন" : "ব্লক খুলুন", blocking);
+      return;
+    }
     const btn = e.target.closest("[data-toggle]");
     if (!btn) return;
     const u = list.find((x) => x.id === btn.dataset.toggle);
@@ -591,7 +619,7 @@ function bindUserEvents(list) {
     const msg = makingAdmin ? `"${who}"-কে অ্যাডমিন করতে চান?` : `"${who}"-এর অ্যাডমিন এক্সেস বাদ দিতে চান?${selfNote}`;
     confirmAction(msg, async () => {
       try {
-        await updateDoc(doc(db, "users", u.id), { isAdmin: makingAdmin });
+        await updateDoc(tvDoc("users", u.id), { isAdmin: makingAdmin });
         showToast("আপডেট হয়েছে।");
         renderUsers(document.getElementById("page"));
       } catch (err) {
@@ -610,7 +638,7 @@ async function renderSettings(page) {
 
   let current = { ...seed.defaultSettings };
   try {
-    const snap = await getDoc(doc(db, "settings", "site"));
+    const snap = await getDoc(tvDoc("settings", "site"));
     if (snap.exists()) current = { ...current, ...snap.data() };
   } catch (err) { console.error(err); }
 
@@ -662,7 +690,7 @@ async function renderSettings(page) {
     const btn = e.target.querySelector("button[type=submit]");
     btn.disabled = true;
     try {
-      await setDoc(doc(db, "settings", "site"), data, { merge: true });
+      await setDoc(tvDoc("settings", "site"), data, { merge: true });
       showToast("সেটিংস সংরক্ষণ হয়েছে।");
     } catch (err) {
       console.error(err);
@@ -685,7 +713,7 @@ async function renderContentList(page, typeKey) {
 
   let items = [];
   try {
-    const q = query(collection(db, typeKey), orderBy("order", "asc"));
+    const q = query(tvCol(typeKey), orderBy("order", "asc"));
     const snap = await getDocs(q);
     items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
@@ -762,7 +790,7 @@ function bindContentListEvents(typeKey, items) {
       const it = items.find((x) => x.id === delBtn.dataset.del);
       confirmAction(`"${escapeHtml(String(it[type.titleField] || ""))}" মুছে ফেলতে চান? এই কাজ আর ফেরানো যাবে না।`, async () => {
         try {
-          await deleteDoc(doc(db, typeKey, it.id));
+          await deleteDoc(tvDoc(typeKey, it.id));
           showToast(`${type.singular} মুছে ফেলা হয়েছে।`);
           renderContentList(document.getElementById("page"), typeKey);
         } catch (err) {
@@ -782,8 +810,8 @@ async function moveItem(typeKey, items, index, dir) {
   if (j < 0 || j >= items.length) return;
   const a = items[index], b = items[j];
   try {
-    await updateDoc(doc(db, typeKey, a.id), { order: b.order });
-    await updateDoc(doc(db, typeKey, b.id), { order: a.order });
+    await updateDoc(tvDoc(typeKey, a.id), { order: b.order });
+    await updateDoc(tvDoc(typeKey, b.id), { order: a.order });
     renderContentList(document.getElementById("page"), typeKey);
   } catch (err) {
     console.error(err);
@@ -889,12 +917,12 @@ function openContentForm(typeKey, existing, items) {
     btn.disabled = true;
     try {
       if (existing) {
-        await updateDoc(doc(db, typeKey, existing.id), data);
+        await updateDoc(tvDoc(typeKey, existing.id), data);
         showToast(`${type.singular} আপডেট হয়েছে।`);
       } else {
         const nextOrder = items.length ? Math.max(...items.map((x) => Number(x.order) || 0)) + 1 : 1;
         data.order = nextOrder;
-        await addDoc(collection(db, typeKey), data);
+        await addDoc(tvCol(typeKey), data);
         showToast(`নতুন ${type.singular} যোগ হয়েছে।`);
       }
       closeModal();

@@ -2,9 +2,9 @@
 // পাবলিক সাইটের কন্টেন্ট এখন এখান থেকে আসে — সরাসরি Firestore থেকে পড়ে।
 // অ্যাডমিন প্যানেলে কেউ কিছু যোগ/এডিট/মুছলে, সাইট রিলোড করলেই সেটা এখানে প্রতিফলিত হয়।
 
-import { db } from "./firebase-config.js";
+import { tvCol, tvDoc } from "./tv-db.js";
 import {
-  collection, getDocs, query, orderBy, doc, getDoc
+  getDocs, query, orderBy, getDoc
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { defaultSettings } from "./seed-data.js";
 
@@ -15,7 +15,7 @@ export const CONTENT_COLLECTIONS = [
 /** একটা কন্টেন্ট কালেকশন order অনুযায়ী সাজিয়ে নিয়ে আসে — সমস্যা হলে খালি অ্যারে দেয়, সাইট ভাঙে না */
 export async function getContent(name) {
   try {
-    const q = query(collection(db, name), orderBy("order", "asc"));
+    const q = query(tvCol(name), orderBy("order", "asc"));
     const snap = await getDocs(q);
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   } catch (err) {
@@ -33,7 +33,7 @@ export async function getAllContent() {
 /** সাইট-ওয়াইড সেটিংস (হিরো টেক্সট, হোয়াটসঅ্যাপ নম্বর ইত্যাদি) — না থাকলে ডিফল্ট মান ব্যবহার হয় */
 export async function getSettings() {
   try {
-    const snap = await getDoc(doc(db, "settings", "site"));
+    const snap = await getDoc(tvDoc("settings", "site"));
     return snap.exists() ? { ...defaultSettings, ...snap.data() } : { ...defaultSettings };
   } catch (err) {
     console.error("সাইট সেটিংস লোড করতে সমস্যা হয়েছে:", err);

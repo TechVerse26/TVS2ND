@@ -12,8 +12,9 @@
 import { icons, icon } from "./icons.js";
 import { avatarOrLetter } from "./templates.js";
 import { escapeHtml as esc, formatDate, formatDay, statusClass, safeUrl, pickAvatar, providerLabel } from "./utils.js";
-import { db } from "./firebase-config.js";
-import { collection, query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+import { tvCol } from "./tv-db.js";
+import { makeAvatarThumb } from "./avatar-thumb.js";
+import { query, where, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 import { saveUserProfile, logout, resetPassword, sendVerification, isAdminProfile, friendlyAuthError } from "./auth.js";
 import { showToast } from "./toast.js";
 import { getThemePref, setThemePref, onThemeChange } from "./theme.js";
@@ -29,7 +30,7 @@ const TITLES = {
 };
 
 const NAV_ICONS = {
-  home: "home", services: "layout", portfolio: "globe", pricing: "target", team: "users", faq: "message", booking: "mail"
+  home: "home", services: "layout", portfolio: "globe", pricing: "target", team: "users", faq: "message", community: "chat", booking: "mail"
 };
 
 const chev = () => icons.chevronRight.replace("<svg", '<svg class="chev"');
@@ -527,7 +528,7 @@ export function createDrawer(opts = {}) {
     state.bookingsState = "loading";
     renderProfile(); renderProjects();
     try {
-      const q = query(collection(db, "bookings"), where("uid", "==", user.uid), orderBy("createdAt", "desc"));
+      const q = query(tvCol("bookings"), where("uid", "==", user.uid), orderBy("createdAt", "desc"));
       const snap = await getDocs(q);
       if (state.user !== user) return;
       state.bookings = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
@@ -555,8 +556,9 @@ export function createDrawer(opts = {}) {
     avatars.forEach((a) => a.classList.add("is-busy"));
     try {
       const data = await fileToAvatarData(file);
-      await saveUserProfile(user.uid, { avatarData: data });
-      state.profile = { ...(state.profile || {}), avatarData: data };
+      const thumb = await makeAvatarThumb(data); // কমিউনিটির ছোট অবতার
+      await saveUserProfile(user.uid, { avatarData: data, avatarThumb: thumb });
+      state.profile = { ...(state.profile || {}), avatarData: data, avatarThumb: thumb };
       profileChanged();
       showToast("প্রোফাইল ছবি আপডেট হয়েছে।");
     } catch (err) {
@@ -571,8 +573,8 @@ export function createDrawer(opts = {}) {
     const user = state.user;
     if (!user) return;
     try {
-      await saveUserProfile(user.uid, { avatarData: "" });
-      state.profile = { ...(state.profile || {}), avatarData: "" };
+      await saveUserProfile(user.uid, { avatarData: "", avatarThumb: "" });
+      state.profile = { ...(state.profile || {}), avatarData: "", avatarThumb: "" };
       profileChanged();
       showToast("প্রোফাইল ছবি সরানো হয়েছে।");
     } catch (err) {
@@ -618,6 +620,11 @@ export function createDrawer(opts = {}) {
   /* ------------------------------------------------------------ actions */
   function scrollToHash(hash) {
     const id = String(hash || "").replace("#", "");
+    // কমিউনিটি খুলতে/ভিউ থেকে বেরোতে হ্যাশ বদলাতে হয় — রাউট সামলায় js/community-entry.js
+    if (id === "community" || document.documentElement.classList.contains("cm-open")) {
+      window.location.hash = "#" + (id || "home");
+      return;
+    }
     if (!id || id === "home") { window.scrollTo({ top: 0, behavior: "smooth" }); return; }
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });

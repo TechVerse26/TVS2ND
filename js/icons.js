@@ -89,7 +89,16 @@ export const icons = {
   copy: s('<rect x="9" y="9" width="11.5" height="11.5" rx="2.6"/><path d="M5.6 15H5.4A2.4 2.4 0 0 1 3 12.6V5.4A2.4 2.4 0 0 1 5.4 3h7.2A2.4 2.4 0 0 1 15 5.4v.2"/>'),
   doc: s('<path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8l-5-5Z"/><path d="M14 3v5h5M9 13h6M9 17h6M9 9h2"/>'),
   help: s('<circle cx="12" cy="12" r="9"/><path d="M9.4 9.3a2.7 2.7 0 0 1 5.2.9c0 1.8-2.6 2.3-2.6 4M12 17.4v.01" stroke-width="2"/>'),
-  heart: s('<path d="M12 20.4s-7.5-4.5-7.5-10.1A4.4 4.4 0 0 1 12 7.6a4.4 4.4 0 0 1 7.5 2.7c0 5.6-7.5 10.1-7.5 10.1Z"/>')
+  heart: s('<path d="M12 20.4s-7.5-4.5-7.5-10.1A4.4 4.4 0 0 1 12 7.6a4.4 4.4 0 0 1 7.5 2.7c0 5.6-7.5 10.1-7.5 10.1Z"/>'),
+  // ---- কমিউনিটি (js/community/*) ----
+  chat: s('<path d="M4 5.5h16a1 1 0 0 1 1 1V16a1 1 0 0 1-1 1h-8.5L7 20.5V17H4a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1Z"/><path d="M8 10h8M8 13h5"/>'),
+  share: s('<circle cx="18" cy="5.5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="18.5" r="2.6"/><path d="M8.3 10.7l7.4-3.9M8.3 13.3l7.4 3.9"/>'),
+  more: s('<circle cx="5.5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="18.5" cy="12" r="1.3" fill="currentColor"/>'),
+  flag: s('<path d="M5 21V4"/><path d="M5 4h11l-1.8 3.5L16 11H5"/>'),
+  reply: s('<path d="M10 8 4 13l6 5"/><path d="M4 13h10a6 6 0 0 1 6 6"/>'),
+  refresh: s('<path d="M20 11a8 8 0 0 0-14.5-4.4L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0 0 14.5 4.4L20 15"/><path d="M20 20v-5h-5"/>'),
+  send: s('<path d="M21 3 10.5 13.5"/><path d="M21 3l-6.5 18-4-7.5L3 9.5 21 3Z"/>'),
+  wifiOff: s('<path d="M3 3l18 18"/><path d="M5 12.5a10 10 0 0 1 3.1-2"/><path d="M10.7 6.1A15 15 0 0 1 22 10"/><path d="M8.5 16a5 5 0 0 1 4.6-1.4"/><path d="M12 19.5v.01" stroke-width="2.4"/>'),
 };
 
 /** নির্দিষ্ট নামের আইকন না পাওয়া গেলে ফলব্যাক হিসেবে code আইকন ব্যবহার হয় */

@@ -4,7 +4,8 @@
 // রোল/অ্যাডমিন-সংক্রান্ত হেল্পারও এখানে — বাস্তব নিরাপত্তা Firestore Security Rules-এ,
 // এই ফাংশনগুলো শুধু UI দেখানোর সিদ্ধান্তে সাহায্য করে।
 
-import { auth, db } from "./firebase-config.js";
+import { auth } from "./firebase-config.js";
+import { tvDoc } from "./tv-db.js";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -18,7 +19,7 @@ import {
   sendEmailVerification
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
 import {
-  doc, setDoc, getDoc, serverTimestamp
+  setDoc, getDoc, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
 const googleProvider = new GoogleAuthProvider();
@@ -47,10 +48,10 @@ export function friendlyAuthError(err) {
 
 /** নতুন ইউজারের জন্য Firestore-এ প্রোফাইল ডকুমেন্ট তৈরি করে (না থাকলে) —
     isAdmin: false স্পষ্টভাবে সেট করা হয়, কারণ users/{uid}-এর সিকিউরিটি রুল
-    create-এর সময় এই ফিল্ডটা false হিসেবে থাকা বাধ্যতামূলক করে রেখেছে
-    (অন্য কোর্স/এক্সাম সাইটের মতোই একই isAdmin বুলিয়ান স্কিম ব্যবহার করা হচ্ছে)। */
+    create-এর সময় এই ফিল্ডটা false হিসেবে থাকা বাধ্যতামূলক করে রেখেছে।
+    প্রোফাইল tvProject/main/users/{uid}-এ থাকে — শুধু এই প্রজেক্টের নিজস্ব। */
 export async function ensureUserDoc(user) {
-  const ref = doc(db, "users", user.uid);
+  const ref = tvDoc("users", user.uid);
   const snap = await getDoc(ref);
   if (!snap.exists()) {
     await setDoc(ref, {
@@ -105,12 +106,12 @@ export async function logout() {
 }
 
 export async function getUserProfile(uid) {
-  const snap = await getDoc(doc(db, "users", uid));
+  const snap = await getDoc(tvDoc("users", uid));
   return snap.exists() ? snap.data() : null;
 }
 
 export async function saveUserProfile(uid, data) {
-  await setDoc(doc(db, "users", uid), data, { merge: true });
+  await setDoc(tvDoc("users", uid), data, { merge: true });
   if (auth.currentUser && data.name) {
     await updateProfile(auth.currentUser, { displayName: data.name });
   }
