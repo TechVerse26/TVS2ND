@@ -154,3 +154,27 @@ body.admin-body{ background: var(--bg); }
   .admin-stat b{ font-size:1.6rem; }
   .icon-picker{ grid-template-columns:repeat(6,1fr); }
 }
+
+/* ---------- কমিউনিটি মডারেশন (js/admin-community.js) — বিদ্যমান .admin-list-card/.chip/.status-badge পুনর্ব্যবহার ---------- */
+.cm-adm-tabs, .cm-adm-sub{ gap:8px; margin-bottom:16px; }
+.cm-adm-count{ font-weight:700; }
+.cm-adm-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+.cm-adm-target{ margin-top:10px; padding:12px 14px; border-radius:14px; background:var(--surface-2); border:1px solid var(--border); }
+.cm-adm-target.is-gone{ color:var(--text-faint); font-size:.88rem; }
+.cm-adm-t-top{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.cm-adm-t-by{ font-size:.8rem; color:var(--text-faint); margin:2px 0 6px; }
+.cm-adm-t-body{ font-size:.9rem; color:var(--text-muted); white-space:pre-wrap; word-break:break-word; }
+.cm-adm-details{ font-style:italic; }
+.cm-adm-more{ display:flex; justify-content:center; padding:10px 0 4px; }
+.cm-adm-more:empty{ display:none; }
+.cm-adm-addrow{ display:grid; grid-template-columns:1fr 110px auto; gap:0 12px; align-items:end; }
+.cm-adm-addrow .btn{ margin-bottom:16px; }
+.cm-adm-cat{ display:grid; grid-template-columns:1fr 84px auto auto auto; gap:8px; align-items:center; padding:10px 0; border-top:1px solid var(--border); }
+.cm-adm-cat input{ width:100%; min-height:42px; padding:8px 12px; border-radius:12px; border:1.5px solid var(--field-border); background:var(--surface-2); color:var(--text); }
+.cm-adm-cat input:focus{ border-color:var(--accent); background:var(--surface); outline:none; box-shadow:0 0 0 1px var(--accent); }
+@media (max-width: 560px){
+  .cm-adm-addrow{ grid-template-columns:1fr 1fr; }
+  .cm-adm-addrow .btn{ grid-column:1 / -1; margin-bottom:0; }
+  .cm-adm-cat{ grid-template-columns:1fr 84px; }
+  .cm-adm-cat .cat-badge{ justify-self:start; }
+}
