@@ -1,355 +1,437 @@
 rules_version = '2';
+
+/* =====================================================================
+   Tech Verse — Firestore Security Rules (শুধুমাত্র এই প্রজেক্টের জন্য)
+
+   ▸ আইসোলেশন: সব ডেটা /tvProject/main/** নেমস্পেসের ভেতরে। অন্য কোনো অ্যাপ/কোর্স/এক্সাম/
+     ফ্ল্যাশকার্ড/Learning Hub-এর কালেকশন বা rule এখানে নেই। নেমস্পেসের বাইরের সবকিছু
+     ফাইলের শেষের default-deny-তে আটকায়।
+   ▸ অ্যাডমিন: tvProject/main/users/{uid}.isAdmin == true — শুধু এই প্রজেক্টের নিজস্ব users।
+     ইউজার নিজের isAdmin/communityBlocked কখনো বদলাতে পারে না (শুধু অ্যাডমিন পারে)।
+   ▸ কোনো global/open write নেই। প্রতিটা create/update-এ ফিল্ড whitelist + টাইপ + দৈর্ঘ্য +
+     সার্ভার-টাইমস্ট্যাম্প যাচাই হয়।
+   ▸ কমিউনিটি পড়া: সবাই (লগইন ছাড়াও) শুধু status == "active" কনটেন্ট পড়তে পারে।
+     লিখতে/লাইক/রিপোর্ট করতে লগইন + ব্লক-না-হওয়া লাগে।
+     (লগইন ছাড়া পড়া বন্ধ করতে চাইলে নিচের canReadContent()-এ isSignedIn() && যোগ করুন।)
+   ===================================================================== */
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    /* ---------------------------------------------------------------
+       ১) সাধারণ হেল্পার
+       --------------------------------------------------------------- */
     function isSignedIn() {
       return request.auth != null;
     }
+    function profilePath(uid) {
+      return /databases/$(database)/documents/tvProject/main/users/$(uid);
+    }
+    function hasProfile() {
+      return isSignedIn() && exists(profilePath(request.auth.uid));
+    }
+    // কলারের নিজের (বিশ্বাসযোগ্য) প্রোফাইল ডকুমেন্ট
+    function profile() {
+      return get(profilePath(request.auth.uid)).data;
+    }
     function isAdmin() {
-      return isSignedIn() &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+      return hasProfile() && profile().get('isAdmin', false) == true;
+    }
+    function isBlocked() {
+      return hasProfile() && profile().get('communityBlocked', false) == true;
+    }
+    // কমিউনিটিতে লেখার অনুমতি: প্রোফাইল আছে এবং অ্যাডমিন ব্লক করেননি
+    function canPost() {
+      return hasProfile() && !isBlocked();
+    }
+    function isStr(v, minLen, maxLen) {
+      return v is string && v.size() >= minLen && v.size() <= maxLen;
+    }
+    function isDocId(v) {
+      return v is string && v.matches('^[A-Za-z0-9]{1,40}$');
+    }
+    function changed() {
+      return request.resource.data.diff(resource.data).affectedKeys();
     }
 
-    /* ---------- একটা like/unlike toggle বৈধ কিনা যাচাই (discussions + replies দুই জায়গাতেই ব্যবহৃত) ----------
-       শর্ত: (ক) শুধু request.auth.uid-টাই যোগ/বাদ হয়েছে, বাকি সব uid অপরিবর্তিত আছে,
-       (খ) লিস্টের সাইজ ঠিক ১ বেড়েছে (লাইক) বা ঠিক ১ কমেছে (আনলাইক)।
-       hasAll() ব্যবহার করে অর্ডার-independent ভাবে যাচাই করা হচ্ছে, তাই arrayUnion/arrayRemove
-       মাঝখান থেকে uid সরালেও (order বদলে গেলেও) সঠিকভাবে ধরা পড়ে। এভাবে কেউ নিজের uid ছাড়া
-       অন্য কারো লাইক জোর করে যোগ/মুছে দিতে পারবে না। */
+    /* ---------------------------------------------------------------
+       ২) প্রোফাইল ভ্যালিডেশন
+       --------------------------------------------------------------- */
+    // avatarThumb: খালি, ছোট data:image, অথবা Google/GitHub-এর অবতার লিংক — অন্য কোনো বাইরের URL নয়
+    function validThumb(v) {
+      return v is string && v.size() <= 12000 && (
+        v == '' ||
+        v.matches('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$') ||
+        v.matches('^https://(lh[0-9]+\\.googleusercontent\\.com|avatars\\.githubusercontent\\.com)/.*$')
+      );
+    }
+    function validProfile(d) {
+      return isStr(d.name, 0, 80)
+        && isStr(d.email, 0, 200)
+        && (!('photoURL' in d) || isStr(d.photoURL, 0, 500))
+        && (!('phone' in d) || isStr(d.phone, 0, 30))
+        && (!('bio' in d) || isStr(d.bio, 0, 500))
+        && (!('avatarData' in d) || isStr(d.avatarData, 0, 150000))
+        && (!('avatarThumb' in d) || validThumb(d.avatarThumb));
+    }
+
+    /* ---------------------------------------------------------------
+       ৩) লাইক যাচাই — শুধু কলারের নিজের uid যোগ/বাদ, বাকি সব uid অপরিবর্তিত, সাইজ ঠিক ±১
+       (সর্বোচ্চ ৫০০০ লাইক/ডকুমেন্ট — ডকুমেন্ট সাইজ সীমার নিরাপদ ভেতরে)
+       --------------------------------------------------------------- */
     function isValidLikeToggle(oldList, newList) {
       let uid = request.auth.uid;
-      return (
+      return newList is list && oldList is list && (
         (uid in newList && !(uid in oldList) &&
-          newList.size() == oldList.size() + 1 &&
+          newList.size() == oldList.size() + 1 && newList.size() <= 5000 &&
           newList.hasAll(oldList)) ||
         (!(uid in newList) && uid in oldList &&
           newList.size() == oldList.size() - 1 &&
           oldList.hasAll(newList))
       );
     }
-    //ইউজার রোল কাউন্টার
-match /counters/{counterId} {
-  allow read: if request.auth != null;
-  allow write: if request.auth != null;
-}
-    /* ---------- replyCount ঠিক ১ বেড়েছে (নতুন রিপ্লাই) বা ঠিক ১ কমেছে (রিপ্লাই ডিলিট) কিনা ---------- */
-    function isValidReplyCountStep(oldCount, newCount) {
-      return newCount == oldCount + 1 || newCount == oldCount - 1;
+
+    /* ---------------------------------------------------------------
+       ৪) কমিউনিটি পাথ ও পড়ার নিয়ম
+       --------------------------------------------------------------- */
+    function discPath(did) {
+      return /databases/$(database)/documents/tvProject/main/discussions/$(did);
+    }
+    function replyPath(did, rid) {
+      return /databases/$(database)/documents/tvProject/main/discussions/$(did)/replies/$(rid);
+    }
+    function categoryPath(cid) {
+      return /databases/$(database)/documents/tvProject/main/categories/$(cid);
+    }
+    function isSlug(v) {
+      return v is string && v.size() <= 40 && v.matches('^[a-z0-9]+(-[a-z0-9]+)*$');
+    }
+    function isActiveCategory(cid) {
+      return isSlug(cid) && get(categoryPath(cid)).data.get('active', false) == true;
+    }
+    // active কনটেন্ট সবাই পড়বে; লুকানো/মুছে ফেলা কনটেন্ট শুধু মালিক ও অ্যাডমিন
+    function canReadContent(d) {
+      return d.status == 'active' || (isSignedIn() && d.uid == request.auth.uid) || isAdmin();
+    }
+    function isOwner() {
+      return isSignedIn() && resource.data.uid == request.auth.uid;
     }
 
-    /* ---------- একটা কুপন রিডিম (ব্যবহার) করার সময় আপডেটটা বৈধ কিনা যাচাই ----------
-       এখানেই আসল সুরক্ষা — ইউজার নিজে usedCount/usedByUsers ছাড়া আর কোনো ফিল্ড
-       (discount value/type/active/maxUses ইত্যাদি) কখনো বদলাতে পারবে না, আর
-       নিচের প্রতিটা শর্ত সত্যি হলে তবেই একটা রিডিম গ্রহণযোগ্য হবে:
-       ১) কুপনটা active থাকতে হবে,
-       ২) মেয়াদ থাকলে তা পার হয়ে যায়নি,
-       ৩) maxUses (০ মানে unlimited) থাকলে এখনো কোটা বাকি আছে,
-       ৪) এই ইউজার আগে কখনো এই কুপনটা ব্যবহার করেনি (usedByUsers এ নেই),
-       ৫) usedCount ঠিক ১ বাড়বে আর usedByUsers এ ঠিক নিজের uid-টাই যোগ হবে —
-          অন্য কারো uid জোর করে ঢোকানো বা সংখ্যা বেশি বাড়ানো যাবে না।
-       Race condition (একসাথে দুইজন শেষ স্লট ব্যবহার করার চেষ্টা করলে) Firestore
-       transaction নিজে থেকেই retry করে সবশেষ কমিটেড ডেটার বিপরীতে এই শর্তগুলো
-       আবার যাচাই করে, তাই maxUses কখনো ছাড়িয়ে যাবে না। */
-    function isValidCouponRedeem(oldC, newC) {
-      return newC.diff(oldC).affectedKeys().hasOnly(["usedCount", "usedByUsers"])
-        && oldC.active == true
-        && (!("expiresAt" in oldC) || oldC.expiresAt == null || request.time < oldC.expiresAt)
-        && (oldC.maxUses == 0 || oldC.usedCount < oldC.maxUses)
-        && !(request.auth.uid in oldC.usedByUsers)
-        && newC.usedCount == oldC.usedCount + 1
-        && newC.usedByUsers.size() == oldC.usedByUsers.size() + 1
-        && newC.usedByUsers.hasAll(oldC.usedByUsers)
-        && request.auth.uid in newC.usedByUsers;
+    /* ---------------------------------------------------------------
+       ৫) রিপ্লাই-কাউন্ট সিঙ্ক (নকল কাউন্ট ঠেকানো)
+       replyCount বদলাতে হলে একই batch-এ একটা রিপ্লাই তৈরি/নিষ্ক্রিয়/সক্রিয় হতে হবে এবং
+       discussion-এ replySyncId = সেই রিপ্লাইয়ের id থাকতে হবে।
+       --------------------------------------------------------------- */
+    // রিপ্লাই-সাইড: batch শেষে parent-এর কাউন্ট ঠিক delta বদলেছে এবং replySyncId মিলেছে কিনা
+    function parentCountDelta(did, rid, delta) {
+      return getAfter(discPath(did)).data.replySyncId == rid
+        && getAfter(discPath(did)).data.replyCount == get(discPath(did)).data.replyCount + delta;
     }
-
-    /* ---------- ইউজার প্রোফাইল ---------- */
-    match /users/{uid} {
-      allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
-
-      allow create: if isSignedIn() && request.auth.uid == uid &&
-        request.resource.data.isAdmin == false;
-
-      allow update: if isSignedIn() && (
-        (request.auth.uid == uid && request.resource.data.isAdmin == resource.data.isAdmin) ||
-        isAdmin()
+    // discussion-সাইড: কাউন্ট বদলের পেছনে সত্যিকারের রিপ্লাই লেখা আছে কিনা
+    function isValidReplySync(did, oldD, newD) {
+      let rid = newD.get('replySyncId', '');
+      return isDocId(rid) && newD.replyCount is int && oldD.replyCount is int && (
+        // (ক) নতুন রিপ্লাই: আগে ছিল না, এখন আছে, লেখক কলার নিজে, active
+        (newD.replyCount == oldD.replyCount + 1 && oldD.status == 'active'
+          && !exists(replyPath(did, rid)) && existsAfter(replyPath(did, rid))
+          && getAfter(replyPath(did, rid)).data.uid == request.auth.uid
+          && getAfter(replyPath(did, rid)).data.status == 'active') ||
+        // (খ) রিপ্লাই মুছে/লুকিয়ে ফেলা: active ছিল, এখন active নয়
+        (newD.replyCount == oldD.replyCount - 1 && oldD.replyCount > 0
+          && exists(replyPath(did, rid)) && get(replyPath(did, rid)).data.status == 'active'
+          && getAfter(replyPath(did, rid)).data.status != 'active') ||
+        // (গ) অ্যাডমিন রিপ্লাই আবার সক্রিয় করা (অ্যাডমিন-ছাড়া কেউ রিপ্লাইয়ের status বদলাতে পারে না)
+        (newD.replyCount == oldD.replyCount + 1
+          && exists(replyPath(did, rid)) && get(replyPath(did, rid)).data.status != 'active'
+          && getAfter(replyPath(did, rid)).data.status == 'active')
       );
-
-      // নিজের অ্যাকাউন্ট নিজে ডিলিট করতে পারবে (প্রোফাইল পেজের "অ্যাকাউন্ট মুছে ফেলুন"), অ্যাডমিনও যে-কারো ডিলিট করতে পারবে
-      allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
-
-      /* ---------- ইউজারের ডিভাইস তালিকা (কোন কোন ফোন/ব্রাউজার থেকে লগইন/সাইন-আপ হয়েছে) ---------- */
-      match /devices/{deviceId} {
-        // নিজের ডিভাইস তালিকা নিজে পড়তে পারবে, অ্যাডমিনও যে-কারো ডিভাইস তালিকা পড়তে পারবে (ওয়ার্নিং দেখানোর জন্য)
-        allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
-
-        // লগইন/সাইন-আপের সময় ইউজার নিজেই নিজের ডিভাইস রেকর্ড লিখবে (auth.js এর recordDeviceLogin ফাংশন)
-        allow create, update: if isSignedIn() && request.auth.uid == uid;
-
-        allow delete: if isAdmin();
-      }
-
-      /* ---------- Learning Hub: এই ইউজারের ফ্ল্যাশকার্ড রিভিউ প্রোগ্রেস (স্পেসড রিপিটিশন) ----------
-         শুধু নিজের প্রোগ্রেস নিজে পড়তে/লিখতে পারবে — অন্য কারো রিভিউ শিডিউল কেউ দেখতে/বদলাতে পারবে না। */
-      match /flashcardProgress/{cardId} {
-        allow read, write: if isSignedIn() && request.auth.uid == uid;
-      }
+    }
+    function isValidReplyTo(did, d) {
+      return (!('replyToId' in d) && !('replyToName' in d)) || (
+        isDocId(d.replyToId) && isStr(d.replyToName, 0, 80)
+        && get(replyPath(did, d.replyToId)).data.authorName == d.replyToName
+      );
+    }
+    function isAdminReplyModeration(did, rid) {
+      return isAdmin()
+        && changed().hasOnly(['status', 'updatedAt', 'moderatedBy', 'moderatedAt'])
+        && request.resource.data.status in ['active', 'hidden', 'deleted']
+        && request.resource.data.moderatedBy == request.auth.uid
+        && request.resource.data.moderatedAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && (
+          ((resource.data.status == 'active') == (request.resource.data.status == 'active')) ||
+          (resource.data.status == 'active' && request.resource.data.status != 'active'
+            && parentCountDelta(did, rid, -1)) ||
+          (resource.data.status != 'active' && request.resource.data.status == 'active'
+            && parentCountDelta(did, rid, 1))
+        );
     }
 
-    /* ---------- কোর্স ---------- */
-    match /courses/{courseId} {
-      allow read: if true;
-      allow write: if isAdmin();
-
-      // সাইন-ইন করা যেকোনো ইউজার এনরোল হওয়ার সময় শুধু enrollCount সংখ্যাটা বাড়াতে পারবে —
-      // বাকি কোনো ফিল্ড বদলাতে পারবে না (কোর্সের তথ্য সুরক্ষিত থাকে, শুধু গণনা বাড়ে)
-      allow update: if isSignedIn()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["enrollCount"])
-        && request.resource.data.enrollCount ==
-           (("enrollCount" in resource.data ? resource.data.enrollCount : 0) + 1);
-
-      match /lessons/{lessonId} {
-        allow read: if true;
-        allow write: if isAdmin();
-      }
-    }
-
-    /* ---------- পরীক্ষা ---------- */
-    match /exams/{examId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-
-      match /questions/{questionId} {
-        allow read: if isSignedIn();
-        allow write: if isAdmin();
-      }
-    }
-
-    /* ---------- পরীক্ষার রুটিন (টাইমটেবিল) — courses-এর মতোই পাবলিক রিড
-       (লগআউট অবস্থাতেও দেখা যাবে, যাতে ভিজিটর সাইন-আপের আগেই সময়সূচি দেখতে
-       পারে), শুধু অ্যাডমিন লিখতে পারবে। examId থাকলেও এটা শুধু একটা রেফারেন্স —
-       আসল এক্সাম অ্যাক্সেস এখনও /exams/{examId} এর নিজের rule দিয়েই হয়। ---------- */
-    match /examRoutine/{routineId} {
-      allow read: if true;
-      allow write: if isAdmin();
-    }
-
-    /* ---------- পরীক্ষার ফলাফল ---------- */
-    match /results/{resultId} {
-      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.uid == request.auth.uid &&
-        request.resource.data.uid == resource.data.uid;
-      allow delete: if isAdmin();
-    }
-
-    /* ---------- সাইট সেটিংস (হোমপেজ হিরো + ফিচার্ড ভিডিও + পেমেন্ট নাম্বার + পারচেজ পজ সুইচ + Tech Verse-এর
-       হিরো/WhatsApp সেটিংস — docId="site") ----------
-       docId "homepage", "purchases", "site" ইত্যাদি সবাই পড়তে পারবে (লগআউট অবস্থাতেও),
-       শুধু "payment" (পেমেন্ট নাম্বার) পড়তে লগইন লাগবে — বাকি সব নিচের একই rule কভার করে। */
-    match /settings/{docId} {
-      allow read: if docId != "payment" || isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    /* ---------- নোটিফিকেশন (অ্যাডমিন প্যানেল থেকে পাঠানো, কোর্স-ট্যাগসহ) ----------
-       শুধু অ্যাডমিন লিখতে/এডিট/ডিলিট করতে পারবে। যেকোনো লগইন করা ইউজার সবগুলো ডকুমেন্ট
-       পড়তে পারবে (কোনটা আসলে দেখানো হবে তা client-side এ audience/enrolledCourses
-       দিয়ে ফিল্টার হয় — js/notifications.js), তাই read এখানে খোলা রাখা নিরাপদ, কারণ
-       ভেতরের কোনো তথ্যই sensitive না (শুধু টাইটেল/মেসেজ/কোর্স-ট্যাগ)।
-       create/update এ স্ট্রং ভ্যালিডেশন: টাইটেল/মেসেজ খালি রাখা যাবে না,
-       audience অবশ্যই "all" বা "enrolled" হতে হবে, courseIds/courseTitles অবশ্যই list হতে হবে। */
-    match /notifications/{notifId} {
-      allow read: if isSignedIn();
-
-      allow create: if isAdmin()
-        && request.resource.data.title is string && request.resource.data.title.size() > 0
-        && request.resource.data.message is string && request.resource.data.message.size() > 0
-        && request.resource.data.audience in ["all", "enrolled"]
-        && request.resource.data.courseIds is list
-        && request.resource.data.courseTitles is list;
-
-      allow update: if isAdmin()
-        && request.resource.data.title is string && request.resource.data.title.size() > 0
-        && request.resource.data.message is string && request.resource.data.message.size() > 0
-        && request.resource.data.audience in ["all", "enrolled"];
-
-      allow delete: if isAdmin();
-    }
-
-    /* ---------- পেইড কোর্স: ক্রয় অনুরোধ ---------- */
-    match /purchaseRequests/{reqId} {
-      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
-
-      allow create: if isSignedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.status == "pending"
-        && request.resource.data.accessCode == "";
-
-      // ইউজার নিজে স্ট্যাটাস/অ্যাক্সেসকোড বদলাতে পারবে না — শুধু অ্যাডমিন অনুমোদন/বাতিল করতে পারবে
-      allow update, delete: if isAdmin();
-    }
-
-    /* ---------- পেইড কোর্স: অ্যাক্সেস কোড ---------- */
-    // ডকুমেন্ট আইডি = নিজেই অ্যাক্সেস কোড (যেমন accessCodes/AB12CD34)
-    match /accessCodes/{code} {
-      allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow create: if isAdmin();
-
-      // ইউজার শুধু নিজের, এখনো-ব্যবহার-না-হওয়া কোডটি "used" করতে পারবে — uid/courseId বদলাতে পারবে না
-      allow update: if isSignedIn()
-        && resource.data.uid == request.auth.uid
-        && resource.data.used == false
-        && request.resource.data.used == true
-        && request.resource.data.uid == resource.data.uid
-        && request.resource.data.courseId == resource.data.courseId
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["used", "usedAt"]);
-
-      allow delete: if isAdmin();
-    }
-
-    /* ---------- ডিসকাউন্ট কুপন ---------- */
-    // ডকুমেন্ট আইডি = নিজেই কুপন কোড (যেমন coupons/EID50) — একই কোড দুইবার তৈরি হতে পারবে না।
-    // get (একটা নির্দিষ্ট কোড লুকআপ) সব সাইন-ইন ইউজার করতে পারবে — কুপন বক্সে কোড লিখে
-    // Apply করার সময় এটাই লাগে। কিন্তু list (পুরো তালিকা) শুধু অ্যাডমিন প্যানেল করতে পারবে,
-    // যাতে কেউ সব লাইভ কোড এক লিস্টে খুঁজে বের করতে না পারে।
-    match /coupons/{code} {
-      allow get: if isSignedIn();
+    /* =================================================================
+       ইউজার প্রোফাইল — tvProject/main/users/{uid}
+       ================================================================= */
+    match /tvProject/main/users/{uid} {
+      allow get: if isSignedIn() && (request.auth.uid == uid || isAdmin());
       allow list: if isAdmin();
 
-      allow create: if isAdmin()
-        && request.resource.data.code == code
-        && request.resource.data.usedCount == 0
-        && request.resource.data.usedByUsers == [];
-
-      // অ্যাডমিন যেকোনো ফিল্ড বদলাতে পারবে (এডিট/অ্যাক্টিভ-টগল)। সাধারণ সাইন-ইন
-      // ইউজার শুধু কেনার সময় isValidCouponRedeem()-এর শর্ত মেনে নিজের একটা রিডিম যোগ করতে পারবে।
-      allow update: if isAdmin() || (isSignedIn() && isValidCouponRedeem(resource.data, request.resource.data));
-
-      allow delete: if isAdmin();
-    }
-
-    /* ---------- Learning Hub: স্পেসড-রিপিটিশন ফ্ল্যাশকার্ড (অ্যাডমিন তৈরি করে) ----------
-       সব সাইন-ইন করা ইউজার পড়তে পারবে (কোন কার্ড আসলে দেখানো হবে তা client-side এ
-       courseId/enrolledCourses দিয়ে ফিল্টার হয় — js/flashcards.js), শুধু অ্যাডমিন
-       লিখতে/এডিট/ডিলিট করতে পারবে। */
-    match /flashcards/{cardId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
-
-    /* ---------- Learning Hub: ডিসকাশন থ্রেড (ফেসবুক-স্টাইল পোস্ট ফিড: like, নিজের পোস্ট/রিপ্লাই
-       edit ও delete, অ্যাডমিন-মডারেশন) ----------
-       - read: যেকোনো সাইন-ইন করা ইউজার
-       - create: নিজের uid দিয়েই, title/body খালি রাখা যাবে না, likedBy খালি লিস্ট আর
-         replyCount শূন্য দিয়েই শুরু হতে হবে (কেউ শুরু থেকেই ভুয়া লাইক/রিপ্লাই-সংখ্যা বসাতে পারবে না)
-       - update নিচের ৩টার একটার বাইরে যাবে না:
-           ১) কেউ রিপ্লাই করলে replyCount + lastActivityAt (ঠিক ১ বাড়বে)
-           ২) যেকোনো সাইন-ইন ইউজার likedBy টগল করলে — কিন্তু শুধু নিজের uid যোগ/বাদ দিতে পারবে,
-              isValidLikeToggle() দিয়ে যাচাই হয়
-           ৩) পোস্টের মালিক নিজে title/body/editedAt এডিট করলে (title/body খালি রাখা যাবে না)
-         এসবের বাইরে অ্যাডমিন করতে পারবে (মডারেশন/ঠিক করা দরকার হলে)
-       - delete: পোস্টের মালিক নিজে অথবা অ্যাডমিন */
-    match /discussions/{threadId} {
-      allow read: if isSignedIn();
-
-      allow create: if isSignedIn()
-        && request.resource.data.uid == request.auth.uid
-        && request.resource.data.title is string && request.resource.data.title.size() > 0
-        && request.resource.data.body is string && request.resource.data.body.size() > 0
-        && request.resource.data.likedBy == []
-        && request.resource.data.replyCount == 0;
+      // নতুন প্রোফাইল: নিজের uid, isAdmin অবশ্যই false, createdAt = সার্ভার সময়, শুধু whitelist ফিল্ড
+      allow create: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'email', 'photoURL', 'phone', 'isAdmin', 'createdAt', 'avatarData', 'avatarThumb', 'bio'])
+        && request.resource.data.keys().hasAll(['name', 'email', 'isAdmin', 'createdAt'])
+        && request.resource.data.isAdmin == false
+        && request.resource.data.createdAt == request.time
+        && validProfile(request.resource.data);
 
       allow update: if isSignedIn() && (
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(["replyCount", "lastActivityAt"])
-          && isValidReplyCountStep(resource.data.replyCount, request.resource.data.replyCount)) ||
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(["likedBy"])
-          && isValidLikeToggle(resource.data.likedBy, request.resource.data.likedBy)) ||
-        (resource.data.uid == request.auth.uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["title", "body", "editedAt"])
-          && request.resource.data.title is string && request.resource.data.title.size() > 0
-          && request.resource.data.body is string && request.resource.data.body.size() > 0) ||
-        isAdmin()
+        // মালিক: শুধু এই ফিল্ডগুলো — isAdmin/communityBlocked/createdAt/email কখনো নয়
+        (request.auth.uid == uid
+          && changed().hasOnly(['name', 'phone', 'bio', 'avatarData', 'avatarThumb'])
+          && validProfile(request.resource.data)) ||
+        // অ্যাডমিন: শুধু রোল ও কমিউনিটি-ব্লক
+        (isAdmin()
+          && changed().hasOnly(['isAdmin', 'communityBlocked'])
+          && request.resource.data.isAdmin is bool
+          && request.resource.data.get('communityBlocked', false) is bool)
       );
 
-      allow delete: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
-
-      match /replies/{replyId} {
-        allow read: if isSignedIn();
-
-        allow create: if isSignedIn()
-          && request.resource.data.uid == request.auth.uid
-          && request.resource.data.body is string && request.resource.data.body.size() > 0
-          && request.resource.data.likedBy == [];
-
-        allow update: if isSignedIn() && (
-          (request.resource.data.diff(resource.data).affectedKeys().hasOnly(["likedBy"])
-            && isValidLikeToggle(resource.data.likedBy, request.resource.data.likedBy)) ||
-          (resource.data.uid == request.auth.uid
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["body", "editedAt"])
-            && request.resource.data.body is string && request.resource.data.body.size() > 0) ||
-          isAdmin()
-        );
-
-        allow delete: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
-      }
+      allow delete: if false;
     }
 
-    /* =====================================================================
-       Tech Verse (TVS2ND-main) — এজেন্সি/বুকিং সাইট
-       নিচের সবকটা নতুন — উপরের বিদ্যমান কোনো rule স্পর্শ করা হয়নি।
-       এখানেও উপরের একই isAdmin() ফাংশন ব্যবহার হচ্ছে (users/{uid}.isAdmin == true) —
-       অর্থাৎ আলাদা কোনো রোল সিস্টেম নেই; যাদের ইতিমধ্যে isAdmin: true আছে, তারাই
-       এই কন্টেন্টও ম্যানেজ করতে পারবেন।
-       ===================================================================== */
-
-    /* ---------- বুকিং ফর্মের অনুরোধ ----------
-       create: যে কেউ (লগইন ছাড়াও) জমা দিতে পারবে, কিন্তু এখন এগুলো জোর করে যাচাই হয় (App Check-এর
-       পাশাপাশি স্প্যাম/জাঙ্ক ডকুমেন্ট ঠেকানোর দ্বিতীয় স্তর হিসেবে):
-       (ক) uid ফিল্ড থাকলে সেটা null (অ্যানোনিমাস) বা নিজের auth.uid-ই হতে হবে;
-       (খ) status ফিল্ড থাকলে সেটা অবশ্যই "নতুন" দিয়েই শুরু হতে হবে;
-       (গ) createdAt অবশ্যই সার্ভার-টাইমস্ট্যাম্প হতে হবে (request.time-এর সমান) — app.js
-           এমনিতেই serverTimestamp() পাঠায়, তাই এটা স্বাভাবিক ব্যবহারে কিছু ভাঙে না, শুধু কেউ
-           সরাসরি SDK কল করে ভুয়া তারিখ বসাতে চাইলে সেটা আটকায়;
-       (ঘ) name/email/service আবশ্যক, টাইপ+দৈর্ঘ্য নির্দিষ্ট, ইমেইল মোটামুটি ইমেইল-আকৃতির;
-       (ঙ) phone/budget/timeline/details ঐচ্ছিক কিন্তু থাকলে অবশ্যই string ও যুক্তিসঙ্গত দৈর্ঘ্যে —
-           কেউ যেন একটা ফিল্ডে মেগাবাইট-সাইজের জাঙ্ক টেক্সট বা ভুল টাইপ (number/map/array) বসিয়ে
-           দিতে না পারে। */
-    match /bookings/{bookingId} {
+    /* =================================================================
+       বুকিং অনুরোধ — tvProject/main/bookings/{bookingId}
+       ================================================================= */
+    match /tvProject/main/bookings/{bookingId} {
+      // যে কেউ (লগইন ছাড়াও) জমা দিতে পারবে — তবে কঠোর ভ্যালিডেশনসহ
       allow create: if
+        request.resource.data.keys().hasOnly(['service', 'name', 'email', 'phone', 'budget', 'timeline', 'details', 'uid', 'status', 'createdAt']) &&
+        request.resource.data.keys().hasAll(['service', 'name', 'email', 'createdAt']) &&
         (!('uid' in request.resource.data) ||
           request.resource.data.uid == null ||
           (isSignedIn() && request.resource.data.uid == request.auth.uid)) &&
-        (!('status' in request.resource.data) || request.resource.data.status == "নতুন") &&
+        (!('status' in request.resource.data) || request.resource.data.status == 'নতুন') &&
         request.resource.data.createdAt == request.time &&
-        request.resource.data.name is string &&
-        request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120 &&
-        request.resource.data.email is string &&
-        request.resource.data.email.size() <= 200 &&
+        isStr(request.resource.data.name, 1, 120) &&
+        isStr(request.resource.data.email, 1, 200) &&
         request.resource.data.email.matches('^[^@]+@[^@]+\\.[^@]+$') &&
-        request.resource.data.service is string &&
-        request.resource.data.service.size() > 0 && request.resource.data.service.size() <= 200 &&
-        (!('phone' in request.resource.data) ||
-          (request.resource.data.phone is string && request.resource.data.phone.size() <= 30)) &&
-        (!('budget' in request.resource.data) ||
-          (request.resource.data.budget is string && request.resource.data.budget.size() <= 100)) &&
-        (!('timeline' in request.resource.data) ||
-          (request.resource.data.timeline is string && request.resource.data.timeline.size() <= 100)) &&
-        (!('details' in request.resource.data) ||
-          (request.resource.data.details is string && request.resource.data.details.size() <= 3000));
+        isStr(request.resource.data.service, 1, 200) &&
+        (!('phone' in request.resource.data) || isStr(request.resource.data.phone, 0, 30)) &&
+        (!('budget' in request.resource.data) || isStr(request.resource.data.budget, 0, 100)) &&
+        (!('timeline' in request.resource.data) || isStr(request.resource.data.timeline, 0, 100)) &&
+        (!('details' in request.resource.data) || isStr(request.resource.data.details, 0, 3000));
 
       allow read: if isSignedIn() && (resource.data.uid == request.auth.uid || isAdmin());
-      allow update, delete: if isAdmin();
+
+      // অ্যাডমিন শুধু status বদলাতে পারবে (বৈধ মানের মধ্যে)
+      allow update: if isAdmin()
+        && changed().hasOnly(['status'])
+        && request.resource.data.status in ['নতুন', 'যোগাযোগ করা হয়েছে', 'চলমান', 'সম্পন্ন', 'বাতিল'];
+      allow delete: if isAdmin();
     }
 
-    /* ---------- সাইটের কন্টেন্ট — সার্ভিস, পোর্টফোলিও, কেস স্টাডি, টেস্টিমোনিয়াল, টিম,
-       স্ট্যাটস, প্রাইসিং, FAQ (অ্যাডমিন প্যানেল থেকে ম্যানেজ করা হয়) ---------- */
-    match /services/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /portfolio/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /caseStudies/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /testimonials/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /team/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /stats/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /pricingPlans/{id} { allow read: if true; allow write: if isAdmin(); }
-    match /faqItems/{id} { allow read: if true; allow write: if isAdmin(); }
+    /* =================================================================
+       সাইট সেটিংস — শুধু settings/site
+       ================================================================= */
+    match /tvProject/main/settings/{docId} {
+      allow read: if docId == 'site';
+      allow create, update: if isAdmin() && docId == 'site' && request.resource.data.keys().size() <= 40;
+      allow delete: if false;
+    }
+
+    /* =================================================================
+       সাইটের কন্টেন্ট (অ্যাডমিন প্যানেল থেকে ম্যানেজ) — পড়া সবার, লেখা শুধু অ্যাডমিন
+       ================================================================= */
+    match /tvProject/main/services/{id}     { allow read: if true; allow create, update: if isAdmin() && request.resource.data.keys().size() <= 30; allow delete: if isAdmin(); }
+    match /tvProject/main/portfolio/{id}    { allow read: if true; allow create, update: if isAdmin() && request.resource.data.keys().size() <= 30; allow delete: if isAdmin(); }
+    match /tvProject/main/caseStudies/{id}  { allow read: if true; allow create, update: if isAdmin() && request.resource.data.keys().size() <= 30; allow delete: if isAdmin(); }
+    match /tvProject/main/testimonials/{id} { allow read: if true; allow create, update: if isAdmin() && request.resource.data.keys().size() <= 30; allow delete: if isAdmin(); }
+    match /tvProject/main/team/{id}         { allow read: if true; allow create, update: if isAdmin() && request.resource.data.keys().size() <= 30; allow delete: if isAdmin(); }
+    match /tvProject/main/stats/{id}        { allow read: if true; allow create, update: if isAdmin() && request.resource.data.keys().size() <= 30; allow delete: if isAdmin(); }
+    match /tvProject/main/pricingPlans/{id} { allow read: if true; allow create, update: if isAdmin() && request.resource.data.keys().size() <= 30; allow delete: if isAdmin(); }
+    match /tvProject/main/faqItems/{id}     { allow read: if true; allow create, update: if isAdmin() && request.resource.data.keys().size() <= 30; allow delete: if isAdmin(); }
+
+    /* =================================================================
+       কমিউনিটি ক্যাটাগরি — tvProject/main/categories/{slug}
+       অ্যাডমিন নতুন ক্যাটাগরি যোগ/নিষ্ক্রিয় করতে পারেন; পোস্ট করতে ক্যাটাগরি active হতে হয়।
+       ================================================================= */
+    match /tvProject/main/categories/{cid} {
+      allow read: if true;
+
+      allow create: if isAdmin() && isSlug(cid)
+        && request.resource.data.keys().hasOnly(['name', 'order', 'active', 'createdAt'])
+        && request.resource.data.keys().hasAll(['name', 'order', 'active', 'createdAt'])
+        && isStr(request.resource.data.name, 1, 40)
+        && request.resource.data.order is int && request.resource.data.order >= 0 && request.resource.data.order <= 9999
+        && request.resource.data.active is bool
+        && request.resource.data.createdAt == request.time;
+
+      allow update: if isAdmin()
+        && changed().hasOnly(['name', 'order', 'active'])
+        && isStr(request.resource.data.name, 1, 40)
+        && request.resource.data.order is int && request.resource.data.order >= 0 && request.resource.data.order <= 9999
+        && request.resource.data.active is bool;
+
+      allow delete: if isAdmin();
+    }
+
+    /* =================================================================
+       আলোচনা — tvProject/main/discussions/{discussionId}
+       status: active | hidden | deleted (soft-delete; হার্ড ডিলিট কারো জন্য নয়)
+       ================================================================= */
+    match /tvProject/main/discussions/{did} {
+
+      allow get: if canReadContent(resource.data);
+      // ফিডে পাতা-ভিত্তিক লোড বাধ্যতামূলক: limit ≤ ৫০ (অ্যাডমিনের কাউন্ট/ম্যানেজমেন্ট কোয়েরি বাদে)
+      allow list: if (isAdmin() || request.query.limit <= 50) && canReadContent(resource.data);
+
+      allow create: if canPost()
+        && request.resource.data.keys().hasOnly(['uid', 'authorName', 'authorAvatar', 'title', 'body', 'category', 'status', 'createdAt', 'updatedAt', 'editedAt', 'likedBy', 'likeCount', 'replyCount'])
+        && request.resource.data.keys().hasAll(['uid', 'authorName', 'authorAvatar', 'title', 'body', 'category', 'status', 'createdAt', 'updatedAt', 'editedAt', 'likedBy', 'likeCount', 'replyCount'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.authorName == profile().get('name', '')
+        && request.resource.data.authorAvatar == profile().get('avatarThumb', '')
+        && isStr(request.resource.data.title, 3, 120)
+        && isStr(request.resource.data.body, 3, 5000)
+        && isActiveCategory(request.resource.data.category)
+        && request.resource.data.status == 'active'
+        && request.resource.data.likedBy == []
+        && request.resource.data.likeCount == 0
+        && request.resource.data.replyCount == 0
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.editedAt == null;
+
+      allow update: if
+        // (১) মালিক নিজের পোস্টের title/body এডিট — editedAt সার্ভার সময়
+        (isOwner() && canPost() && resource.data.status == 'active'
+          && changed().hasOnly(['title', 'body', 'editedAt', 'updatedAt'])
+          && isStr(request.resource.data.title, 3, 120)
+          && isStr(request.resource.data.body, 3, 5000)
+          && request.resource.data.editedAt == request.time
+          && request.resource.data.updatedAt == request.time) ||
+        // (২) মালিক নিজের পোস্ট মুছে ফেলা (soft delete)
+        (isOwner() && resource.data.status == 'active'
+          && changed().hasOnly(['status', 'updatedAt'])
+          && request.resource.data.status == 'deleted'
+          && request.resource.data.updatedAt == request.time) ||
+        // (৩) লাইক/আনলাইক — likeCount সবসময় likedBy.size()-এর সমান
+        (canPost() && resource.data.status == 'active'
+          && changed().hasOnly(['likedBy', 'likeCount'])
+          && isValidLikeToggle(resource.data.likedBy, request.resource.data.likedBy)
+          && request.resource.data.likeCount == request.resource.data.likedBy.size()) ||
+        // (৪) রিপ্লাই কাউন্ট — একই batch-এ আসল রিপ্লাই লেখা থাকলেই
+        (isSignedIn()
+          && changed().hasOnly(['replyCount', 'replySyncId'])
+          && isValidReplySync(did, resource.data, request.resource.data)) ||
+        // (৫) অ্যাডমিন মডারেশন — শুধু status
+        (isAdmin()
+          && changed().hasOnly(['status', 'updatedAt', 'moderatedBy', 'moderatedAt'])
+          && request.resource.data.status in ['active', 'hidden', 'deleted']
+          && request.resource.data.moderatedBy == request.auth.uid
+          && request.resource.data.moderatedAt == request.time
+          && request.resource.data.updatedAt == request.time);
+
+      allow delete: if false;
+
+      /* ---------- রিপ্লাই — discussions/{did}/replies/{rid} ---------- */
+      match /replies/{rid} {
+
+        allow get: if (resource.data.status == 'active' && get(discPath(did)).data.status == 'active')
+          || (isSignedIn() && resource.data.uid == request.auth.uid)
+          || isAdmin();
+        allow list: if (isAdmin() || request.query.limit <= 50)
+          && ((resource.data.status == 'active' && get(discPath(did)).data.status == 'active')
+            || (isSignedIn() && resource.data.uid == request.auth.uid)
+            || isAdmin());
+
+        allow create: if canPost()
+          && request.resource.data.keys().hasOnly(['uid', 'authorName', 'authorAvatar', 'body', 'replyToId', 'replyToName', 'status', 'createdAt', 'updatedAt', 'editedAt', 'likedBy', 'likeCount'])
+          && request.resource.data.keys().hasAll(['uid', 'authorName', 'authorAvatar', 'body', 'status', 'createdAt', 'updatedAt', 'editedAt', 'likedBy', 'likeCount'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.authorName == profile().get('name', '')
+          && request.resource.data.authorAvatar == profile().get('avatarThumb', '')
+          && isStr(request.resource.data.body, 1, 2000)
+          && request.resource.data.status == 'active'
+          && request.resource.data.likedBy == []
+          && request.resource.data.likeCount == 0
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.updatedAt == request.time
+          && request.resource.data.editedAt == null
+          && isValidReplyTo(did, request.resource.data)
+          && get(discPath(did)).data.status == 'active'
+          && parentCountDelta(did, rid, 1);
+
+        allow update: if
+          // (১) মালিক নিজের রিপ্লাই এডিট
+          (isOwner() && canPost() && resource.data.status == 'active'
+            && changed().hasOnly(['body', 'editedAt', 'updatedAt'])
+            && isStr(request.resource.data.body, 1, 2000)
+            && request.resource.data.editedAt == request.time
+            && request.resource.data.updatedAt == request.time) ||
+          // (২) মালিক নিজের রিপ্লাই মুছে ফেলা (soft delete) + parent কাউন্ট −১
+          (isOwner() && resource.data.status == 'active'
+            && changed().hasOnly(['status', 'updatedAt'])
+            && request.resource.data.status == 'deleted'
+            && request.resource.data.updatedAt == request.time
+            && parentCountDelta(did, rid, -1)) ||
+          // (৩) লাইক/আনলাইক
+          (canPost() && resource.data.status == 'active'
+            && get(discPath(did)).data.status == 'active'
+            && changed().hasOnly(['likedBy', 'likeCount'])
+            && isValidLikeToggle(resource.data.likedBy, request.resource.data.likedBy)
+            && request.resource.data.likeCount == request.resource.data.likedBy.size()) ||
+          // (৪) অ্যাডমিন মডারেশন
+          isAdminReplyModeration(did, rid);
+
+        allow delete: if false;
+      }
+    }
+
+    /* =================================================================
+       রিপোর্ট — tvProject/main/reports/{reporterUid_targetType_targetId}
+       ডকুমেন্ট id নির্ধারিত বলে একই ইউজার একই কনটেন্টে দ্বিতীয় রিপোর্ট করতে পারে না
+       (দ্বিতীয়বার লেখা = update, আর update শুধু অ্যাডমিনের)।
+       ================================================================= */
+    match /tvProject/main/reports/{reportId} {
+      // রিপোর্টার শুধু নিজের (id যার শুরুতে নিজের uid) ডকুমেন্ট পড়তে পারে — "আগেই রিপোর্ট করেছি কি?" দেখার জন্য
+      allow get: if isSignedIn() && (isAdmin() || reportId.matches(request.auth.uid + '_.*'));
+      allow list: if isAdmin();
+
+      allow create: if canPost()
+        && request.resource.data.keys().hasOnly(['reporterUid', 'targetType', 'targetId', 'discussionId', 'reason', 'details', 'status', 'createdAt'])
+        && request.resource.data.keys().hasAll(['reporterUid', 'targetType', 'targetId', 'discussionId', 'reason', 'status', 'createdAt'])
+        && request.resource.data.reporterUid == request.auth.uid
+        && request.resource.data.targetType in ['discussion', 'reply']
+        && isDocId(request.resource.data.targetId)
+        && isDocId(request.resource.data.discussionId)
+        && reportId == request.auth.uid + '_' + request.resource.data.targetType + '_' + request.resource.data.targetId
+        && (
+          (request.resource.data.targetType == 'discussion'
+            && request.resource.data.discussionId == request.resource.data.targetId
+            && exists(discPath(request.resource.data.targetId))) ||
+          (request.resource.data.targetType == 'reply'
+            && exists(replyPath(request.resource.data.discussionId, request.resource.data.targetId)))
+        )
+        && request.resource.data.reason in ['spam', 'abuse', 'harassment', 'misinformation', 'inappropriate', 'other']
+        && (!('details' in request.resource.data) || isStr(request.resource.data.details, 0, 500))
+        && request.resource.data.status == 'open'
+        && request.resource.data.createdAt == request.time;
+
+      // অ্যাডমিন রিভিউ/রেজল্ভ
+      allow update: if isAdmin()
+        && changed().hasOnly(['status', 'reviewedBy', 'reviewedAt', 'resolutionNote'])
+        && request.resource.data.status in ['open', 'reviewing', 'resolved', 'dismissed']
+        && request.resource.data.reviewedBy == request.auth.uid
+        && request.resource.data.reviewedAt == request.time
+        && (!('resolutionNote' in request.resource.data) || isStr(request.resource.data.resolutionNote, 0, 500));
+
+      allow delete: if isAdmin();
+    }
+
+    /* =================================================================
+       Default deny — উপরে স্পষ্টভাবে অনুমতি না দেওয়া সবকিছু বন্ধ
+       ================================================================= */
+    match /{document=**} {
+      allow read, write: if false;
+    }
   }
 }

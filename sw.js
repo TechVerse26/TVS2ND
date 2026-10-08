@@ -3,13 +3,14 @@
 // কৌশল: নিজের সাইটের ফাইল (HTML/CSS/JS) আগে নেটওয়ার্ক থেকে আনে (তাই ডিজাইন/কোড আপডেট করলে ইউজার সাথে সাথেই
 // নতুনটা পায়), নেটওয়ার্ক না থাকলে ক্যাশ থেকে দেয়। Firebase SDK ও ফন্টের মতো ভার্সন-করা বাইরের ফাইল ক্যাশ-ফার্স্ট।
 // Firestore/Auth API রিকোয়েস্ট কখনো ক্যাশ হয় না।
-const CACHE_NAME = "techverse-shell-v01.00.02";
+const CACHE_NAME = "techverse-shell-v01.00.03";
 const SHELL_FILES = [
   "./",
   "./index.html",
   "./css/styles.css",
   "./css/drawer.css",
   "./css/footer.css",
+  "./css/community.css",
   "./js/app.js",
   "./js/drawer.js",
   "./js/theme.js",
@@ -28,6 +29,11 @@ const SHELL_FILES = [
   "./js/toast.js",
   "./js/auth.js",
   "./js/firebase-config.js",
+  "./js/tv-db.js",
+  "./js/avatar-thumb.js",
+  "./js/community-entry.js",
+  "./js/community/app.js",
+  "./js/community/api.js",
   "./manifest.json",
   "./assets/logo.svg"
 ];

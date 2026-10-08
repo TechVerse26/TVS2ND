@@ -40,6 +40,7 @@
 <link rel="stylesheet" href="./css/styles.css">
 <link rel="stylesheet" href="./css/drawer.css">
 <link rel="stylesheet" href="./css/footer.css">
+<link rel="stylesheet" href="./css/community.css">
 <script>
   (function () {
     try {
@@ -80,6 +81,7 @@
       <a href="#pricing">প্যাকেজ</a>
       <a href="#team">টিম</a>
       <a href="#faq">প্রশ্নোত্তর</a>
+      <a href="#community">কমিউনিটি</a>
       <a href="#booking">যোগাযোগ</a>
     </nav>
     <div class="nav-actions">
@@ -312,6 +314,9 @@
 
 </div><!-- /mainContent -->
 
+<!-- ===== কমিউনিটি (js/community-entry.js রাউট করে; কোড lazy-load হয়) ===== -->
+<section class="section cm-section" id="community" aria-label="কমিউনিটি" hidden></section>
+
 <!-- ===== Footer (js/footer.js রেন্ডার করে — তথ্য js/contact.js-এ) ===== -->
 <footer class="footer" id="siteFooter"></footer>
 
@@ -399,6 +404,7 @@
 </div>
 
 <script type="module" src="./js/site.js"></script>
+<script type="module" src="./js/community-entry.js"></script>
 <script type="module" src="./js/app.js"></script>
 </body>
 </html>
