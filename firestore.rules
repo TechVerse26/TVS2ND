@@ -1,0 +1,697 @@
+rules_version = '2';
+
+// ============================================================================
+// Tech Verse — Firestore Security Rules  (Firebase project: tvsitesofficial)
+//
+// নেমস্পেস: সব অ্যাপ-ডেটা  tvProject/main/**  (js/tv-db.js)। এর বাইরের সবকিছু default-deny।
+// এই ফাইল js/ এর আসল কোড (auth.js, drawer.js, app.js, admin.js, admin-community.js,
+// community/api.js, community/app.js, content.js) যে ফিল্ড-সেট লেখে ও যে কোয়েরি চালায় তার সাথে মেলানো।
+//
+// মূল নীতি
+//  • অ্যাডমিন = tvProject/main/users/{uid}.isAdmin == true  — শুধু Console/Admin SDK বা বিদ্যমান অ্যাডমিন বদলাতে পারে।
+//  • কোনো সাধারণ ইউজার নিজের isAdmin / communityBlocked / createdAt / email বদলাতে পারে না।
+//  • প্রতিটা write-এ ফিল্ড-allowlist + টাইপ + দৈর্ঘ্য + সার্ভার-টাইমস্ট্যাম্প (request.time) যাচাই।
+//  • আলোচনা/রিপ্লাই হার্ড-ডিলিট কারো জন্যই বন্ধ (soft-delete: status = deleted)।
+//  • replyCount বদলাতে হলে একই batch-এ আসল রিপ্লাই তৈরি/মুছা/মডারেশন লাগে (getAfter/existsAfter)।
+//  • Rules কোয়েরির ফলাফল ফিল্টার করে না — তাই পাবলিক list-এ status == 'active' ও limit ≤ 50 বাধ্যতামূলক।
+//
+// সীমা: rules দিয়ে rate-limit/স্প্যাম সম্পূর্ণ ঠেকানো যায় না → App Check চালু করুন (docs/FIRESTORE_RULES_REPORT.md)।
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ------------------------------------------------------------------ কনফিগ-ফাংশন
+    // কমিউনিটি কনটেন্ট কে পড়তে পারবে — এখন লগইন ছাড়াও সবাই।
+    // শুধু লগইন-করা ইউজারের জন্য সীমিত করতে বদলান:  return isSignedIn();
+    function canReadContent() {
+      return true;
+    }
+
+    // বুকিং-স্ট্যাটাসের তালিকা — js/utils.js-এর BOOKING_STATUSES-এর হুবহু একই (প্রথমটা = নতুন বুকিংয়ের স্ট্যাটাস)
+    function bookingStatuses() {
+      return ['নতুন', 'যোগাযোগ করা হয়েছে', 'চলমান', 'সম্পন্ন', 'বাতিল'];
+    }
+
+    // ------------------------------------------------------------------ পাথ-হেল্পার
+    function userPath(uid) {
+      return /databases/$(database)/documents/tvProject/main/users/$(uid);
+    }
+    function discussionPath(did) {
+      return /databases/$(database)/documents/tvProject/main/discussions/$(did);
+    }
+    function replyPath(did, rid) {
+      return /databases/$(database)/documents/tvProject/main/discussions/$(did)/replies/$(rid);
+    }
+    function categoryPath(cid) {
+      return /databases/$(database)/documents/tvProject/main/categories/$(cid);
+    }
+
+    // ------------------------------------------------------------------ অথ ও রোল
+    // anonymous-auth ইউজার "লগইন করা" ধরা হয় না (অ্যাপ anonymous অথ ব্যবহার করে না)
+    function isSignedIn() {
+      return request.auth != null
+          && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // অ্যাডমিন যাচাই — সবসময় সার্ভারে থাকা users/{uid}.isAdmin থেকে (ক্লায়েন্টের পাঠানো কিছু থেকে নয়)
+    function isAdmin() {
+      return isSignedIn()
+          && get(userPath(request.auth.uid)).data.get('isAdmin', false) == true;
+    }
+
+    // কমিউনিটিতে লেখা/লাইক/রিপোর্ট করার যোগ্য: লগইন + প্রোফাইল আছে + communityBlocked নয়
+    function isCommunityMember() {
+      return isSignedIn()
+          && get(userPath(request.auth.uid)).data.get('communityBlocked', false) == false;
+    }
+
+    // ------------------------------------------------------------------ সাধারণ ভ্যালিডেশন-হেল্পার
+    function isId(s) {
+      return s is string && s.matches('[A-Za-z0-9]{1,40}');
+    }
+
+    function hasExactly(d, allowed) {
+      return d.keys().hasOnly(allowed) && d.keys().hasAll(allowed);
+    }
+
+    function isHttpUrlOrEmpty(v) {
+      return v is string && v.size() <= 2048 && (v == '' || v.matches('https?://[^ ]+'));
+    }
+
+    function isText(v, minLen, maxLen) {
+      return v is string && v.size() >= minLen && v.size() <= maxLen;
+    }
+
+    // ============================================================== users
+    function emailMatchesToken(email) {
+      return email is string
+          && email.size() <= 320
+          && email.lower() == request.auth.token.get('email', '').lower();
+    }
+
+    // কমিউনিটির ছোট অবতার (js/avatar-thumb.js): খালি | ≤১২০০০ অক্ষরের image data-URL | Google/GitHub অবতার URL (≤৫০০)
+    function isAvatarThumb(v) {
+      return v is string
+          && (v == ''
+              || (v.size() <= 12000 && v.matches('data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+'))
+              || (v.size() <= 500 && v.matches('https://(lh[0-9]+[.]googleusercontent[.]com|avatars[.]githubusercontent[.]com)/[^ ]*')));
+    }
+
+    // প্রোফাইল ছবি (js/drawer.js — ২৫৬px JPEG data-URL)
+    function isAvatarData(v) {
+      return v is string
+          && (v == ''
+              || (v.size() <= 160000 && v.matches('data:image/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/=]+')));
+    }
+
+    // ensureUserDoc() (js/auth.js) যা লেখে — হুবহু এই ৬টা ফিল্ড
+    function validNewProfile() {
+      let d = request.resource.data;
+      return hasExactly(d, ['name', 'email', 'photoURL', 'phone', 'isAdmin', 'createdAt'])
+          && d.name is string && d.name.size() <= 120
+          && emailMatchesToken(d.email)
+          && d.photoURL is string && d.photoURL.size() <= 2048
+          && (d.photoURL == '' || d.photoURL.matches('https://[^ ]+'))
+          && d.phone is string && d.phone.size() <= 40
+          && d.isAdmin == false
+          && d.createdAt == request.time;
+    }
+
+    // নিজের প্রোফাইল এডিট — saveUserProfile() (setDoc merge) ও loadAuthor()-এর avatarThumb আপডেট।
+    // শুধু যে ফিল্ডগুলো আসলে বদলাচ্ছে (diff) সেগুলোই যাচাই হয়; isAdmin/communityBlocked/createdAt/email/photoURL বদলানো অসম্ভব।
+    function validSelfProfileEdit() {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['name', 'phone', 'bio', 'avatarData', 'avatarThumb'])
+          && (!changed.hasAny(['name'])        || isText(d.name, 1, 120))
+          && (!changed.hasAny(['phone'])       || isText(d.phone, 0, 40))
+          && (!changed.hasAny(['bio'])         || isText(d.bio, 0, 500))
+          && (!changed.hasAny(['avatarData'])  || isAvatarData(d.avatarData))
+          && (!changed.hasAny(['avatarThumb']) || isAvatarThumb(d.avatarThumb));
+    }
+
+    // অ্যাডমিনের ইউজার-ম্যানেজমেন্ট (js/admin.js): শুধু isAdmin ও communityBlocked, boolean
+    function validAdminUserEdit() {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['isAdmin', 'communityBlocked'])
+          && (!changed.hasAny(['isAdmin'])          || d.isAdmin is bool)
+          && (!changed.hasAny(['communityBlocked']) || d.communityBlocked is bool);
+    }
+
+    // ============================================================== bookings
+    // app.js-এর addDoc যা লেখে — হুবহু এই ১০টা ফিল্ড
+    function validNewBooking() {
+      let d = request.resource.data;
+      return hasExactly(d, ['service', 'name', 'email', 'phone', 'budget', 'timeline', 'details', 'uid', 'status', 'createdAt'])
+          && isText(d.service, 0, 300)
+          && isText(d.name, 1, 120)
+          && d.email is string && d.email.size() <= 254 && d.email.matches('[^@ ]+@[^@ ]+')
+          && isText(d.phone, 0, 40)
+          && isText(d.budget, 0, 100)
+          && isText(d.timeline, 0, 100)
+          && isText(d.details, 0, 5000)
+          && ((!isSignedIn() && d.uid == null) || (isSignedIn() && d.uid == request.auth.uid))
+          && d.status == bookingStatuses()[0]
+          && d.createdAt == request.time;
+    }
+
+    function validBookingStatusChange() {
+      let d = request.resource.data;
+      return d.diff(resource.data).affectedKeys().hasOnly(['status'])
+          && d.status in bookingStatuses();
+    }
+
+    // ============================================================== settings/site
+    function settingsFieldsOk(d, ks) {
+      return ks.hasOnly(['siteName', 'heroEyebrow', 'heroTitle', 'heroSubtitle', 'heroCtaPrimary', 'heroCtaSecondary', 'seoDescription', 'codeUrl', 'courseUrl'])
+          && (!ks.hasAny(['siteName'])         || isText(d.siteName, 0, 120))
+          && (!ks.hasAny(['heroEyebrow'])      || isText(d.heroEyebrow, 0, 200))
+          && (!ks.hasAny(['heroTitle'])        || isText(d.heroTitle, 0, 400))
+          && (!ks.hasAny(['heroSubtitle'])     || isText(d.heroSubtitle, 0, 1500))
+          && (!ks.hasAny(['heroCtaPrimary'])   || isText(d.heroCtaPrimary, 0, 150))
+          && (!ks.hasAny(['heroCtaSecondary']) || isText(d.heroCtaSecondary, 0, 150))
+          && (!ks.hasAny(['seoDescription'])   || isText(d.seoDescription, 0, 800))
+          && (!ks.hasAny(['codeUrl'])          || isHttpUrlOrEmpty(d.codeUrl))
+          && (!ks.hasAny(['courseUrl'])        || isHttpUrlOrEmpty(d.courseUrl));
+    }
+
+    // ============================================================== সাইট-কন্টেন্ট (admin.js CONTENT_TYPES)
+    // create: ফর্ম/সিড যে ফিল্ড-সেট লেখে ঠিক সেটা + order। update: শুধু যা বদলাচ্ছে তা যাচাই (পুরোনো/মাইগ্রেট করা ডকও চলে)।
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function serviceFieldsOk(d, ks) {
+      return (!ks.hasAny(['title']) || isText(d.title, 1, 300))
+          && (!ks.hasAny(['desc'])  || isText(d.desc, 1, 3000))
+          && (!ks.hasAny(['icon'])  || isText(d.icon, 0, 40))
+          && (!ks.hasAny(['order']) || d.order is number);
+    }
+    function portfolioFieldsOk(d, ks) {
+      return (!ks.hasAny(['title'])    || isText(d.title, 1, 300))
+          && (!ks.hasAny(['category']) || d.category in ['web', 'pwa', 'design'])
+          && (!ks.hasAny(['tag'])      || isText(d.tag, 1, 60))
+          && (!ks.hasAny(['stack'])    || isText(d.stack, 0, 300))
+          && (!ks.hasAny(['desc'])     || isText(d.desc, 1, 3000))
+          && (!ks.hasAny(['imageUrl']) || isHttpUrlOrEmpty(d.imageUrl))
+          && (!ks.hasAny(['order'])    || d.order is number);
+    }
+    function caseStudyFieldsOk(d, ks) {
+      return (!ks.hasAny(['title'])        || isText(d.title, 1, 300))
+          && (!ks.hasAny(['desc'])         || isText(d.desc, 1, 3000))
+          && (!ks.hasAny(['metric1Value']) || isText(d.metric1Value, 1, 80))
+          && (!ks.hasAny(['metric1Label']) || isText(d.metric1Label, 1, 150))
+          && (!ks.hasAny(['metric2Value']) || isText(d.metric2Value, 1, 80))
+          && (!ks.hasAny(['metric2Label']) || isText(d.metric2Label, 1, 150))
+          && (!ks.hasAny(['order'])        || d.order is number);
+    }
+    function testimonialFieldsOk(d, ks) {
+      return (!ks.hasAny(['name'])      || isText(d.name, 1, 150))
+          && (!ks.hasAny(['role'])      || isText(d.role, 1, 250))
+          && (!ks.hasAny(['quote'])     || isText(d.quote, 1, 3000))
+          && (!ks.hasAny(['avatarUrl']) || isHttpUrlOrEmpty(d.avatarUrl))
+          && (!ks.hasAny(['order'])     || d.order is number);
+    }
+    function teamFieldsOk(d, ks) {
+      return (!ks.hasAny(['name'])      || isText(d.name, 1, 150))
+          && (!ks.hasAny(['role'])      || isText(d.role, 1, 250))
+          && (!ks.hasAny(['avatarUrl']) || isHttpUrlOrEmpty(d.avatarUrl))
+          && (!ks.hasAny(['order'])     || d.order is number);
+    }
+    function statFieldsOk(d, ks) {
+      return (!ks.hasAny(['value'])  || d.value is number)
+          && (!ks.hasAny(['suffix']) || isText(d.suffix, 0, 30))
+          && (!ks.hasAny(['label'])  || isText(d.label, 1, 250))
+          && (!ks.hasAny(['order'])  || d.order is number);
+    }
+    function pricingFieldsOk(d, ks) {
+      return (!ks.hasAny(['name'])     || isText(d.name, 1, 150))
+          && (!ks.hasAny(['price'])    || isText(d.price, 1, 150))
+          && (!ks.hasAny(['featured']) || d.featured is bool)
+          && (!ks.hasAny(['features']) || (d.features is list && d.features.size() <= 40))
+          && (!ks.hasAny(['order'])    || d.order is number);
+    }
+    function faqFieldsOk(d, ks) {
+      return (!ks.hasAny(['q'])     || isText(d.q, 1, 400))
+          && (!ks.hasAny(['a'])     || isText(d.a, 1, 4000))
+          && (!ks.hasAny(['order']) || d.order is number);
+    }
+
+    // ============================================================== categories
+    function validNewCategory(cid) {
+      let d = request.resource.data;
+      return cid.matches('[a-z0-9-]{1,40}')
+          && hasExactly(d, ['name', 'order', 'active', 'createdAt'])
+          && isText(d.name, 1, 40)
+          && d.order is number && d.order >= 0 && d.order <= 9999
+          && d.active is bool
+          && d.createdAt == request.time;
+    }
+
+    function validCategoryEdit() {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['name', 'order', 'active', 'createdAt'])
+          && (!changed.hasAny(['name'])      || isText(d.name, 1, 40))
+          && (!changed.hasAny(['order'])     || (d.order is number && d.order >= 0 && d.order <= 9999))
+          && (!changed.hasAny(['active'])    || d.active is bool)
+          && (!changed.hasAny(['createdAt']) || d.createdAt == request.time);
+    }
+
+    // নতুন আলোচনার ক্যাটাগরি অবশ্যই বিদ্যমান ও active হতে হবে (get() না পেলে rule বাতিল)
+    function categoryIsActive(cid) {
+      return get(categoryPath(cid)).data.get('active', true) == true;
+    }
+
+    // ============================================================== discussions
+    // createDiscussion() (community/api.js) যা লেখে — হুবহু এই ১৩টা ফিল্ড (replySyncId/moderation ফিল্ড ক্লায়েন্ট দিতে পারে না)
+    function validNewDiscussion() {
+      let d = request.resource.data;
+      let p = get(userPath(request.auth.uid)).data;
+      return isSignedIn()
+          && hasExactly(d, ['uid', 'authorName', 'authorAvatar', 'title', 'body', 'category', 'status', 'createdAt', 'updatedAt', 'editedAt', 'likedBy', 'likeCount', 'replyCount'])
+          && d.uid == request.auth.uid
+          && p.get('communityBlocked', false) == false
+          && d.authorName is string && d.authorName == p.get('name', '')
+          && d.authorAvatar is string && d.authorAvatar == p.get('avatarThumb', '')
+          && isText(d.title, 3, 120)
+          && isText(d.body, 3, 5000)
+          && d.category is string && d.category.matches('[a-z0-9-]{1,40}')
+          && categoryIsActive(d.category)
+          && d.status == 'active'
+          && d.createdAt == request.time
+          && d.updatedAt == request.time
+          && d.editedAt == null
+          && d.likedBy is list && d.likedBy.size() == 0
+          && d.likeCount == 0
+          && d.replyCount == 0;
+    }
+
+    // মালিকের এডিট — editDiscussion(): title, body, editedAt, updatedAt
+    function validDiscussionEdit() {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['title', 'body', 'editedAt', 'updatedAt'])
+          && changed.hasAll(['editedAt', 'updatedAt'])
+          && d.editedAt == request.time
+          && d.updatedAt == request.time
+          && (!changed.hasAny(['title']) || isText(d.title, 3, 120))
+          && (!changed.hasAny(['body'])  || isText(d.body, 3, 5000));
+    }
+
+    // মালিকের soft-delete — deleteDiscussion() / deleteReply(): status → deleted + updatedAt
+    function validOwnerSoftDelete() {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['status', 'updatedAt'])
+          && changed.hasAll(['status', 'updatedAt'])
+          && d.status == 'deleted'
+          && d.updatedAt == request.time;
+    }
+
+    // লাইক/আনলাইক — setLike(): arrayUnion/arrayRemove(নিজের uid) + increment(±1)
+    // ঠিক একটা uid (কলারের নিজের) যোগ বা বাদ; বাকি সবাই অপরিবর্তিত; likeCount == likedBy.size()
+    function validLikeChange() {
+      let d = request.resource.data;
+      let b = resource.data;
+      let me = request.auth.uid;
+      return d.diff(b).affectedKeys().hasOnly(['likedBy', 'likeCount'])
+          && d.likedBy is list
+          && d.likeCount is int
+          && d.likedBy.size() <= 5000
+          && d.likeCount == d.likedBy.size()
+          && ((!(me in b.likedBy) && me in d.likedBy
+                && d.likedBy.size() == b.likedBy.size() + 1
+                && b.likedBy.hasOnly(d.likedBy))
+              ||
+              (me in b.likedBy && !(me in d.likedBy)
+                && d.likedBy.size() == b.likedBy.size() - 1
+                && d.likedBy.hasOnly(b.likedBy)));
+    }
+
+    // অ্যাডমিন মডারেশন — moderateDiscussion(): status, updatedAt, moderatedBy, moderatedAt
+    function validModeration() {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['status', 'updatedAt', 'moderatedBy', 'moderatedAt'])
+          && d.status in ['active', 'hidden', 'deleted']
+          && d.updatedAt == request.time
+          && d.moderatedBy == request.auth.uid
+          && d.moderatedAt == request.time;
+    }
+
+    // ---- replyCount সিঙ্ক (parent discussion আপডেট — রিপ্লাইয়ের সাথে একই batch-এ)
+    // আগে সস্তা (ডক-না-পড়া) শর্ত, শেষে get()/getAfter() — যাতে অন্য ধরনের আপডেটে বাড়তি document-access খরচ না হয়।
+    function isReplySyncUpdate() {
+      return changedKeys().hasOnly(['replyCount', 'replySyncId'])
+          && isId(request.resource.data.get('replySyncId', ''));
+    }
+
+    // (ক) নতুন রিপ্লাই তৈরি: count +1, replySyncId = নতুন রিপ্লাইয়ের id; রিপ্লাইটা এই batch-এর আগে ছিল না, পরে আছে (active, কলারের নিজের)
+    function validReplyCountOnCreate(did) {
+      let d = request.resource.data;
+      let b = resource.data;
+      return b.status == 'active'
+          && d.replyCount is int
+          && d.replyCount == b.replyCount + 1
+          && newReplyCreatedByCaller(did, d.replySyncId);
+    }
+    function newReplyCreatedByCaller(did, rid) {
+      let created = getAfter(replyPath(did, rid)).data;
+      return !exists(replyPath(did, rid))
+          && created.uid == request.auth.uid
+          && created.status == 'active'
+          && isCommunityMember();
+    }
+
+    // (খ) মালিক নিজের active রিপ্লাই soft-delete করছে: count −1
+    function validReplyCountOnOwnerDelete(did) {
+      let d = request.resource.data;
+      let b = resource.data;
+      return d.replyCount is int
+          && d.replyCount >= 0
+          && d.replyCount == b.replyCount - 1
+          && ownReplyDeletedInBatch(did, d.replySyncId);
+    }
+    function ownReplyDeletedInBatch(did, rid) {
+      let replyNow = get(replyPath(did, rid)).data;
+      let replyNext = getAfter(replyPath(did, rid)).data;
+      return replyNow.status == 'active'
+          && replyNow.uid == request.auth.uid
+          && replyNext.status == 'deleted';
+    }
+
+    // (গ) অ্যাডমিন রিপ্লাইয়ের active-ness বদলাচ্ছে: active→অন্য = −1, অন্য→active = +1
+    function validReplyCountOnModeration(did) {
+      let d = request.resource.data;
+      let b = resource.data;
+      return d.replyCount is int
+          && d.replyCount >= 0
+          && (d.replyCount == b.replyCount - 1 || d.replyCount == b.replyCount + 1)
+          && replyActivenessChanged(did, d.replySyncId, d.replyCount - b.replyCount);
+    }
+    function replyActivenessChanged(did, rid, delta) {
+      let replyNow = get(replyPath(did, rid)).data;
+      let replyNext = getAfter(replyPath(did, rid)).data;
+      return (delta == -1 && replyNow.status == 'active' && replyNext.status in ['hidden', 'deleted'])
+          || (delta == 1 && replyNow.status in ['hidden', 'deleted'] && replyNext.status == 'active');
+    }
+
+    // ============================================================== replies
+    function parentIsActive(did) {
+      return get(discussionPath(did)).data.status == 'active';
+    }
+
+    function replyToTargetOk(did, targetId, targetAuthor) {
+      let t = get(replyPath(did, targetId)).data;
+      return t.status == 'active' && t.authorName == targetAuthor;
+    }
+
+    // replyToId/replyToName দুটোই থাকবে বা দুটোই থাকবে না; থাকলে টার্গেট রিপ্লাই active ও লেখকের নাম মিলতে হবে
+    function replyToOk(d, did) {
+      return !d.keys().hasAny(['replyToId', 'replyToName'])
+          || (d.keys().hasAll(['replyToId', 'replyToName'])
+              && isId(d.replyToId)
+              && d.replyToName is string
+              && replyToTargetOk(did, d.replyToId, d.replyToName));
+    }
+
+    // createReply() (community/api.js) যা লেখে + parent-এর count/replySyncId (getAfter) যাচাই
+    function validNewReply(did, rid) {
+      let d = request.resource.data;
+      let p = get(userPath(request.auth.uid)).data;
+      let parentBefore = get(discussionPath(did)).data;
+      let parentAfter = getAfter(discussionPath(did)).data;
+      return isSignedIn()
+          && d.keys().hasOnly(['uid', 'authorName', 'authorAvatar', 'body', 'status', 'createdAt', 'updatedAt', 'editedAt', 'likedBy', 'likeCount', 'replyToId', 'replyToName'])
+          && d.keys().hasAll(['uid', 'authorName', 'authorAvatar', 'body', 'status', 'createdAt', 'updatedAt', 'editedAt', 'likedBy', 'likeCount'])
+          && d.uid == request.auth.uid
+          && p.get('communityBlocked', false) == false
+          && d.authorName is string && d.authorName == p.get('name', '')
+          && d.authorAvatar is string && d.authorAvatar == p.get('avatarThumb', '')
+          && isText(d.body, 1, 2000)
+          && d.status == 'active'
+          && d.createdAt == request.time
+          && d.updatedAt == request.time
+          && d.editedAt == null
+          && d.likedBy is list && d.likedBy.size() == 0
+          && d.likeCount == 0
+          && replyToOk(d, did)
+          && parentBefore.status == 'active'
+          && parentAfter.replyCount == parentBefore.replyCount + 1
+          && parentAfter.replySyncId == rid;
+    }
+
+    // মালিকের এডিট — editReply(): body, editedAt, updatedAt
+    function validReplyEdit() {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['body', 'editedAt', 'updatedAt'])
+          && changed.hasAll(['editedAt', 'updatedAt'])
+          && d.editedAt == request.time
+          && d.updatedAt == request.time
+          && (!changed.hasAny(['body']) || isText(d.body, 1, 2000));
+    }
+
+    // মালিকের soft-delete: parent-এর count একই batch-এ ঠিক −১ এবং replySyncId = এই রিপ্লাইয়ের id
+    function validOwnerReplyDelete(did, rid) {
+      return validOwnerSoftDelete() && parentCountDropsByOne(did, rid);
+    }
+    function parentCountDropsByOne(did, rid) {
+      let parentBefore = get(discussionPath(did)).data;
+      let parentAfter = getAfter(discussionPath(did)).data;
+      return parentAfter.replyCount >= 0
+          && parentAfter.replyCount == parentBefore.replyCount - 1
+          && parentAfter.replySyncId == rid;
+    }
+
+    // অ্যাডমিন রিপ্লাই-মডারেশন — moderateReply(): active-ness বদলালে count ±১ (replySyncId = id); না বদলালে count অপরিবর্তিত
+    function validReplyModeration(did, rid) {
+      return validModeration() && moderationCountOk(did, rid);
+    }
+    function moderationCountOk(did, rid) {
+      let wasActive = resource.data.status == 'active';
+      let nowActive = request.resource.data.status == 'active';
+      let parentBefore = get(discussionPath(did)).data;
+      let parentAfter = getAfter(discussionPath(did)).data;
+      return (wasActive == nowActive && parentAfter.replyCount == parentBefore.replyCount)
+          || (wasActive && !nowActive
+              && parentAfter.replyCount == parentBefore.replyCount - 1
+              && parentAfter.replySyncId == rid)
+          || (!wasActive && nowActive
+              && parentAfter.replyCount == parentBefore.replyCount + 1
+              && parentAfter.replySyncId == rid);
+    }
+
+    // ============================================================== reports
+    function reportTargetExists(d) {
+      return (d.targetType == 'discussion' && d.discussionId == d.targetId && exists(discussionPath(d.targetId)))
+          || (d.targetType == 'reply' && exists(replyPath(d.discussionId, d.targetId)));
+    }
+
+    // submitReport(): ডকুমেন্ট-id = {reporterUid}_{targetType}_{targetId} (একই কনটেন্টে ২য় রিপোর্ট = update ⇒ শুধু অ্যাডমিন)
+    function validNewReport(reportId) {
+      let d = request.resource.data;
+      return isSignedIn()
+          && d.keys().hasOnly(['reporterUid', 'targetType', 'targetId', 'discussionId', 'reason', 'status', 'createdAt', 'details'])
+          && d.keys().hasAll(['reporterUid', 'targetType', 'targetId', 'discussionId', 'reason', 'status', 'createdAt'])
+          && d.reporterUid == request.auth.uid
+          && d.targetType in ['discussion', 'reply']
+          && isId(d.targetId)
+          && isId(d.discussionId)
+          && reportId == d.reporterUid + '_' + d.targetType + '_' + d.targetId
+          && d.reason in ['spam', 'abuse', 'harassment', 'misinformation', 'inappropriate', 'other']
+          && (!d.keys().hasAny(['details']) || isText(d.details, 0, 500))
+          && d.status == 'open'
+          && d.createdAt == request.time
+          && reportTargetExists(d)
+          && get(userPath(request.auth.uid)).data.get('communityBlocked', false) == false;
+    }
+
+    // অ্যাডমিনের রিভিউ — setReportStatus() / moderateFromReport(): status, reviewedBy, reviewedAt, (resolutionNote)
+    function validReportReview() {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['status', 'reviewedBy', 'reviewedAt', 'resolutionNote'])
+          && d.status in ['open', 'reviewing', 'resolved', 'dismissed']
+          && d.reviewedBy == request.auth.uid
+          && d.reviewedAt == request.time
+          && (!changed.hasAny(['resolutionNote']) || isText(d.resolutionNote, 0, 500));
+    }
+
+    // ======================================================================================
+    //                                   tvProject/main/**
+    // ======================================================================================
+    match /tvProject/main {
+
+      // ---------------------------------------------------------------- users/{uid}
+      match /users/{uid} {
+        allow get: if isOwner(uid);
+        allow get, list: if isAdmin();
+        allow create: if isOwner(uid) && validNewProfile();
+        allow update: if isOwner(uid) && validSelfProfileEdit();
+        allow update: if isAdmin() && validAdminUserEdit();
+        // delete: কারো জন্যই নয়
+      }
+
+      // ---------------------------------------------------------------- bookings/{id}
+      match /bookings/{bookingId} {
+        allow create: if validNewBooking();
+        allow get, list: if isAdmin();
+        allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid;
+        allow update: if isAdmin() && validBookingStatusChange();
+        allow delete: if isAdmin();
+      }
+
+      // ---------------------------------------------------------------- settings/site
+      match /settings/site {
+        allow get: if true;
+        allow create: if isAdmin() && settingsFieldsOk(request.resource.data, request.resource.data.keys());
+        allow update: if isAdmin() && settingsFieldsOk(request.resource.data, changedKeys());
+      }
+
+      // ---------------------------------------------------------------- সাইট-কন্টেন্ট (৮টা)
+      match /services/{id} {
+        allow get, list: if true;
+        allow create: if isAdmin() && hasExactly(request.resource.data, ['title', 'desc', 'icon', 'order'])
+                      && serviceFieldsOk(request.resource.data, request.resource.data.keys());
+        allow update: if isAdmin() && changedKeys().hasOnly(['title', 'desc', 'icon', 'order'])
+                      && serviceFieldsOk(request.resource.data, changedKeys());
+        allow delete: if isAdmin();
+      }
+      match /portfolio/{id} {
+        allow get, list: if true;
+        allow create: if isAdmin() && hasExactly(request.resource.data, ['title', 'category', 'tag', 'stack', 'desc', 'imageUrl', 'order'])
+                      && portfolioFieldsOk(request.resource.data, request.resource.data.keys());
+        allow update: if isAdmin() && changedKeys().hasOnly(['title', 'category', 'tag', 'stack', 'desc', 'imageUrl', 'order'])
+                      && portfolioFieldsOk(request.resource.data, changedKeys());
+        allow delete: if isAdmin();
+      }
+      match /caseStudies/{id} {
+        allow get, list: if true;
+        allow create: if isAdmin() && hasExactly(request.resource.data, ['title', 'desc', 'metric1Value', 'metric1Label', 'metric2Value', 'metric2Label', 'order'])
+                      && caseStudyFieldsOk(request.resource.data, request.resource.data.keys());
+        allow update: if isAdmin() && changedKeys().hasOnly(['title', 'desc', 'metric1Value', 'metric1Label', 'metric2Value', 'metric2Label', 'order'])
+                      && caseStudyFieldsOk(request.resource.data, changedKeys());
+        allow delete: if isAdmin();
+      }
+      match /testimonials/{id} {
+        allow get, list: if true;
+        allow create: if isAdmin() && hasExactly(request.resource.data, ['name', 'role', 'quote', 'avatarUrl', 'order'])
+                      && testimonialFieldsOk(request.resource.data, request.resource.data.keys());
+        allow update: if isAdmin() && changedKeys().hasOnly(['name', 'role', 'quote', 'avatarUrl', 'order'])
+                      && testimonialFieldsOk(request.resource.data, changedKeys());
+        allow delete: if isAdmin();
+      }
+      match /team/{id} {
+        allow get, list: if true;
+        allow create: if isAdmin() && hasExactly(request.resource.data, ['name', 'role', 'avatarUrl', 'order'])
+                      && teamFieldsOk(request.resource.data, request.resource.data.keys());
+        allow update: if isAdmin() && changedKeys().hasOnly(['name', 'role', 'avatarUrl', 'order'])
+                      && teamFieldsOk(request.resource.data, changedKeys());
+        allow delete: if isAdmin();
+      }
+      match /stats/{id} {
+        allow get, list: if true;
+        allow create: if isAdmin() && hasExactly(request.resource.data, ['value', 'suffix', 'label', 'order'])
+                      && statFieldsOk(request.resource.data, request.resource.data.keys());
+        allow update: if isAdmin() && changedKeys().hasOnly(['value', 'suffix', 'label', 'order'])
+                      && statFieldsOk(request.resource.data, changedKeys());
+        allow delete: if isAdmin();
+      }
+      match /pricingPlans/{id} {
+        allow get, list: if true;
+        allow create: if isAdmin() && hasExactly(request.resource.data, ['name', 'price', 'featured', 'features', 'order'])
+                      && pricingFieldsOk(request.resource.data, request.resource.data.keys());
+        allow update: if isAdmin() && changedKeys().hasOnly(['name', 'price', 'featured', 'features', 'order'])
+                      && pricingFieldsOk(request.resource.data, changedKeys());
+        allow delete: if isAdmin();
+      }
+      match /faqItems/{id} {
+        allow get, list: if true;
+        allow create: if isAdmin() && hasExactly(request.resource.data, ['q', 'a', 'order'])
+                      && faqFieldsOk(request.resource.data, request.resource.data.keys());
+        allow update: if isAdmin() && changedKeys().hasOnly(['q', 'a', 'order'])
+                      && faqFieldsOk(request.resource.data, changedKeys());
+        allow delete: if isAdmin();
+      }
+
+      // ---------------------------------------------------------------- categories/{slug}
+      match /categories/{categoryId} {
+        allow get: if canReadContent();
+        allow list: if canReadContent() && request.query.limit <= 50;
+        allow list: if isAdmin();
+        allow create: if isAdmin() && validNewCategory(categoryId);
+        allow update: if isAdmin() && validCategoryEdit();
+        allow delete: if isAdmin();
+      }
+
+      // ---------------------------------------------------------------- discussions/{did}
+      match /discussions/{did} {
+        allow get: if canReadContent() && resource.data.status == 'active';
+        allow get: if isOwner(resource.data.uid);            // মালিক নিজের লুকানো/মুছে-ফেলা আলোচনাও দেখে
+        allow get: if isAdmin();
+        allow list: if canReadContent() && resource.data.status == 'active' && request.query.limit <= 50;
+        allow list: if isAdmin();
+
+        allow create: if isId(did) && validNewDiscussion();
+
+        // সস্তা (ডক-না-পড়া) শর্ত আগে, get()-ভিত্তিক isCommunityMember()/isAdmin() সবার শেষে
+        // মালিক: এডিট (ব্লকড ইউজার পারে না)
+        allow update: if isOwner(resource.data.uid) && resource.data.status == 'active'
+                      && validDiscussionEdit() && isCommunityMember();
+        // মালিক: soft-delete (ব্লকড ইউজারও নিজের কনটেন্ট মুছতে পারে)
+        allow update: if isOwner(resource.data.uid) && resource.data.status == 'active'
+                      && validOwnerSoftDelete();
+        // যেকোনো সদস্য: লাইক/আনলাইক (শুধু active আলোচনায়)
+        allow update: if resource.data.status == 'active' && validLikeChange() && isCommunityMember();
+        // replyCount সিঙ্ক (রিপ্লাইয়ের সাথে একই batch-এ)
+        allow update: if isReplySyncUpdate() && isSignedIn() && validReplyCountOnCreate(did);
+        allow update: if isReplySyncUpdate() && isSignedIn() && validReplyCountOnOwnerDelete(did);
+        // অ্যাডমিন: মডারেশন + মডারেশনের সাথে count সিঙ্ক
+        allow update: if validModeration() && isAdmin();
+        allow update: if isReplySyncUpdate() && isAdmin() && validReplyCountOnModeration(did);
+        // delete: কারো জন্যই নয় (soft-delete)
+
+        // -------------------------------------------------------------- discussions/{did}/replies/{rid}
+        match /replies/{rid} {
+          allow get: if canReadContent() && resource.data.status == 'active' && parentIsActive(did);
+          allow get: if isAdmin();
+          allow list: if canReadContent() && resource.data.status == 'active' && request.query.limit <= 50 && parentIsActive(did);
+          allow list: if isAdmin();
+
+          allow create: if isId(rid) && validNewReply(did, rid);
+
+          allow update: if isOwner(resource.data.uid) && resource.data.status == 'active'
+                        && validReplyEdit() && isCommunityMember() && parentIsActive(did);
+          allow update: if isOwner(resource.data.uid) && resource.data.status == 'active'
+                        && validOwnerReplyDelete(did, rid);
+          allow update: if resource.data.status == 'active' && validLikeChange()
+                        && isCommunityMember() && parentIsActive(did);
+          allow update: if validReplyModeration(did, rid) && isAdmin();
+          // delete: কারো জন্যই নয় (soft-delete)
+        }
+      }
+
+      // ---------------------------------------------------------------- reports/{uid_type_target}
+      match /reports/{reportId} {
+        allow get: if isSignedIn() && reportId.split('_')[0] == request.auth.uid;   // নিজের (এমনকি না-থাকা) রিপোর্টের id দেখা — hasReported()
+        allow get, list: if isAdmin();
+        allow create: if validNewReport(reportId);
+        allow update: if isAdmin() && validReportReview();
+        // delete: কারো জন্যই নয় (অডিট-ট্রেইল)
+      }
+    }
+
+    // ------------------------------------------------------------------ বাকি সবকিছু — default-deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
