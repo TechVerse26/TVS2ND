@@ -2,9 +2,13 @@
   "name": "techverse-rules-tests",
   "private": true,
   "type": "module",
-  "description": "Tech Verse — Firestore Security Rules tests (Firebase Emulator). Kept inside tests/ so the static site's deploy never installs these.",
+  "description": "Tech Verse — Firestore Security Rules tests (Firebase Emulator + অফলাইন সিমুলেটর + client↔rules contract). Kept inside tests/ so the static site's deploy never installs these.",
+  "engines": { "node": ">=18.19" },
   "scripts": {
-    "test": "firebase emulators:exec --only firestore --project tv-rules-test --config ../firebase.json \"node --test firestore.rules.test.mjs\""
+    "test": "firebase emulators:exec --only firestore --project tv-rules-test --config ../firebase.json \"node --test firestore.rules.test.mjs contract.test.mjs\"",
+    "test:offline": "node --import ./offline/register.mjs firestore.rules.test.mjs && node contract.test.mjs",
+    "test:contract": "node contract.test.mjs",
+    "test:mutation": "node offline/mutation-check.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^3.0.4",
