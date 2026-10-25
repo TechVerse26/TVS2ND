@@ -40,10 +40,10 @@ const M = [
   ["users: anyone signed-in can list", "allow get, list: if isAdmin();\n        allow create: if isOwner(uid)", "allow get, list: if isSignedIn();\n        allow create: if isOwner(uid)"],
   ["users: delete allowed for owner", "// delete: কারো জন্যই নয়\n      }\n\n      // ---------------------------------------------------------------- bookings", "allow delete: if isOwner(uid);\n      }\n\n      // ---------------------------------------------------------------- bookings"],
   // --- bookings ---
-  ["booking: drop status check", "&& d.status == bookingStatuses()[0]", ""],
+  ["booking: drop status check", "&& d.status == statuses[0]", ""],
   ["booking: any uid accepted", "&& ((!isSignedIn() && d.uid == null) || (isSignedIn() && d.uid == request.auth.uid))", ""],
   ["booking: signed-in may forge other uid", "|| (isSignedIn() && d.uid == request.auth.uid))", "|| (isSignedIn()))"],
-  ["booking: drop createdAt check", "&& d.status == bookingStatuses()[0]\n          && d.createdAt == request.time;", "&& d.status == bookingStatuses()[0];"],
+  ["booking: drop createdAt check", "&& d.status == statuses[0]\n          && d.createdAt == request.time;", "&& d.status == statuses[0];"],
   ["booking: drop email pattern", "&& d.email.matches('[^@ ]+@[^@ ]+')", ""],
   ["booking: details unlimited", "isText(d.details, 0, 5000)", "d.details is string"],
   ["booking: owner read filter removed", "allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid;", "allow get, list: if isSignedIn();"],
