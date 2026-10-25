@@ -146,10 +146,13 @@ service cloud.firestore {
 
     // ============================================================== bookings
     // app.js-এর addDoc যা লেখে — হুবহু এই ১০টা ফিল্ড
+    // বুকিং-এর প্রথম ফিল্ডের নাম Rules ভাষার একটা কিওয়ার্ডের সাথে মেলে — তাই dot-এর বদলে ব্র্যাকেটে (d['…']) লেখা।
+    // ফাংশন-কলের ফলাফলে সরাসরি ইনডেক্স না দিয়ে আগে let-ভেরিয়েবলে (statuses) রাখা হয়েছে।
     function validNewBooking() {
       let d = request.resource.data;
+      let statuses = bookingStatuses();
       return hasExactly(d, ['service', 'name', 'email', 'phone', 'budget', 'timeline', 'details', 'uid', 'status', 'createdAt'])
-          && isText(d.service, 0, 300)
+          && isText(d['service'], 0, 300)
           && isText(d.name, 1, 120)
           && d.email is string && d.email.size() <= 254 && d.email.matches('[^@ ]+@[^@ ]+')
           && isText(d.phone, 0, 40)
@@ -157,7 +160,7 @@ service cloud.firestore {
           && isText(d.timeline, 0, 100)
           && isText(d.details, 0, 5000)
           && ((!isSignedIn() && d.uid == null) || (isSignedIn() && d.uid == request.auth.uid))
-          && d.status == bookingStatuses()[0]
+          && d.status == statuses[0]
           && d.createdAt == request.time;
     }
 
