@@ -373,16 +373,21 @@ async function runSeed(emptyTypes) {
   const btn = document.getElementById("seedBtn");
   if (btn) { btn.disabled = true; btn.textContent = "বসানো হচ্ছে..."; }
   try {
-    const batch = writeBatch(db);
+    // Firestore Rules একটা batch-এ সর্বোচ্চ ২০টা document-access-call অনুমোদন করে, আর প্রতিটা লেখায় isAdmin()-এর জন্য ১টা করে যায় —
+    // তাই একসাথে ১৫টার বেশি লেখা নয়। এক টাইপের সব আইটেম একই batch-এ থাকে (যাতে কোনো টাইপ আধা-সিড না হয়)।
+    const MAX_PER_BATCH = 15;
+    const batches = [];
+    let batch = writeBatch(db), n = 0;
+    const room = (count) => { if (n && n + count > MAX_PER_BATCH) { batches.push(batch); batch = writeBatch(db); n = 0; } };
     emptyTypes.forEach((key) => {
-      (SEED_MAP[key] || []).forEach((item) => {
-        const ref = doc(tvCol(key));
-        batch.set(ref, item);
-      });
+      const items = SEED_MAP[key] || [];
+      room(items.length);
+      items.forEach((item) => { batch.set(doc(tvCol(key)), item); n++; });
     });
     const settingsSnap = await getDoc(tvDoc("settings", "site"));
-    if (!settingsSnap.exists()) batch.set(tvDoc("settings", "site"), seed.defaultSettings);
-    await batch.commit();
+    if (!settingsSnap.exists()) { room(1); batch.set(tvDoc("settings", "site"), seed.defaultSettings); n++; }
+    if (n) batches.push(batch);
+    for (const b of batches) await b.commit();
     showToast("ডিফল্ট কন্টেন্ট বসানো হয়েছে।");
     renderDashboard(document.getElementById("page"));
   } catch (err) {
