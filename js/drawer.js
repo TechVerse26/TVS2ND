@@ -30,7 +30,7 @@ const TITLES = {
 };
 
 const NAV_ICONS = {
-  home: "home", services: "layout", portfolio: "globe", pricing: "target", team: "users", faq: "message", community: "chat", booking: "mail"
+  home: "home", services: "layout", portfolio: "globe", pricing: "target", team: "users", faq: "message", community: "chat", blog: "book", booking: "mail"
 };
 
 const chev = () => icons.chevronRight.replace("<svg", '<svg class="chev"');
@@ -620,8 +620,9 @@ export function createDrawer(opts = {}) {
   /* ------------------------------------------------------------ actions */
   function scrollToHash(hash) {
     const id = String(hash || "").replace("#", "");
-    // কমিউনিটি খুলতে/ভিউ থেকে বেরোতে হ্যাশ বদলাতে হয় — রাউট সামলায় js/community-entry.js
-    if (id === "community" || document.documentElement.classList.contains("cm-open")) {
+    // কমিউনিটি/ব্লগ খুলতে বা সেই ভিউ থেকে বেরোতে হ্যাশ বদলাতে হয় — রাউট সামলায় js/community-entry.js ও js/blog-entry.js
+    const root = document.documentElement.classList;
+    if (id === "community" || id === "blog" || root.contains("cm-open") || root.contains("bl-open")) {
       window.location.hash = "#" + (id || "home");
       return;
     }

@@ -22,6 +22,7 @@ import { showToast } from "./toast.js";
 import { escapeHtml, formatDate, debounce, BOOKING_STATUSES, statusClass, safeUrl } from "./utils.js";
 import * as seed from "./seed-data.js";
 import { renderCommunity } from "./admin-community.js";
+import { renderBlog, leaveBlog } from "./admin-blog.js";
 import { countOpenReports } from "./community/api.js";
 
 const SEED_MAP = {
@@ -126,7 +127,7 @@ const CONTENT_TYPES = {
 const CONTENT_ORDER = Object.keys(CONTENT_TYPES);
 
 const ROUTE_TITLES = {
-  dashboard: "ড্যাশবোর্ড", bookings: "বুকিং/অনুরোধ", community: "কমিউনিটি মডারেশন", users: "ইউজার", settings: "সেটিংস",
+  dashboard: "ড্যাশবোর্ড", bookings: "বুকিং/অনুরোধ", community: "কমিউনিটি মডারেশন", blog: "ব্লগ", users: "ইউজার", settings: "সেটিংস",
   ...Object.fromEntries(CONTENT_ORDER.map((k) => [k, CONTENT_TYPES[k].label]))
 };
 
@@ -209,6 +210,7 @@ function navHtml() {
     ${item("dashboard", "dashboard", "ড্যাশবোর্ড")}
     ${item("bookings", "inbox", "বুকিং/অনুরোধ")}
     ${item("community", "chat", "কমিউনিটি মডারেশন")}
+    ${item("blog", "book", "ব্লগ")}
     <div class="admin-nav-label">কন্টেন্ট ম্যানেজমেন্ট</div>
     ${CONTENT_ORDER.map((k) => item(k, CONTENT_TYPES[k].icon, CONTENT_TYPES[k].label)).join("")}
     <div class="admin-nav-label">অ্যাকাউন্ট</div>
@@ -229,18 +231,21 @@ function closeSidebarMobile() {
 /* ================= Router ================= */
 
 function route() {
-  const hash = (window.location.hash || "#dashboard").replace("#", "");
-  const valid = hash === "dashboard" || hash === "bookings" || hash === "community" || hash === "users" || hash === "settings" || CONTENT_TYPES[hash];
+  const full = (window.location.hash || "#dashboard").replace("#", "");
+  const [hash, ...sub] = full.split("/");                       // #blog/edit/{id} ইত্যাদি সাব-রাউট: প্রথম অংশই বিভাগ
+  const valid = hash === "dashboard" || hash === "bookings" || hash === "community" || hash === "blog" || hash === "users" || hash === "settings" || CONTENT_TYPES[hash];
   const r = valid ? hash : "dashboard";
   document.querySelectorAll("#adminNav a").forEach((a) => a.classList.toggle("active", a.dataset.route === r));
   const topTitle = document.getElementById("topbarTitle");
   if (topTitle) topTitle.textContent = ROUTE_TITLES[r] || "";
   closeSidebarMobile();
+  leaveBlog();                                                    // ব্লগ-এডিটরের গার্ড/লিসেনার (অন্য রাউটে গেলেও) পরিষ্কার
   const page = document.getElementById("page");
   page.innerHTML = "";
   if (r === "dashboard") renderDashboard(page);
   else if (r === "bookings") renderBookings(page);
   else if (r === "community") renderCommunity(page, { pageHeadHtml, confirmAction, skeletonTableHtml, uid: currentUid });
+  else if (r === "blog") renderBlog(page, { pageHeadHtml, confirmAction, skeletonTableHtml, uid: currentUid, sub });
   else if (r === "users") renderUsers(page);
   else if (r === "settings") renderSettings(page);
   else renderContentList(page, r);

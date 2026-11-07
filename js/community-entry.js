@@ -42,7 +42,7 @@ function init() {
   function enter() {
     if (isOpen) return;
     isOpen = true;
-    savedTitle = document.title;
+    // (savedTitle এখানে আর নতুন করে ধরা হয় না — ব্লগ (#blog) থেকে সরাসরি এলে ব্লগের শিরোনাম ভুল করে "আসল" ধরা পড়ত)
     main.hidden = true;
     view.hidden = false;
     document.documentElement.classList.add("cm-open");
@@ -54,8 +54,9 @@ function init() {
     isOpen = false;
     if (app) app.hide();
     view.hidden = true;
-    main.hidden = false;
     document.documentElement.classList.remove("cm-open", "cm-thread");
+    if (document.documentElement.classList.contains("bl-open")) return;   // ব্লগে যাচ্ছে (js/blog-entry.js) — মূল সাইট ফেরানো হবে না
+    main.hidden = false;
     document.title = savedTitle;
     const id = location.hash.replace(/^#/, "");
     const target = id && id !== "home" ? document.getElementById(id) : null;
