@@ -1,0 +1,38 @@
+// storage.rules — Firebase Storage (শুধু ব্লগের কভার ছবি)
+// ⚠️ এই প্রজেক্টে এতদিন Storage ছিল না (README: "Firebase Storage যুক্ত করা হয়নি")। Storage চালু না করলে ব্লগ ঠিকই চলে —
+//    অ্যাডমিন কভার ছবির URL পেস্ট করতে পারে; আপলোড-বাটন শুধু Storage চালু ও এই rules ডিপ্লয়ের পর কাজ করে।
+//
+// ডিপ্লয়ের পূর্বশর্ত (একবার):
+//   1) Firebase Console → Build → Storage → "Get started" (নতুন বাকেটের জন্য Blaze প্ল্যান লাগতে পারে — Console জানাবে)।
+//   2) firebase deploy --only storage        (প্রথমবার CLI জিজ্ঞেস করবে: rules-এ firestore.get() ব্যবহারের জন্য
+//      Storage সার্ভিস-এজেন্টকে Firestore পড়ার IAM role দিতে — "Yes" দিন; এটাই cross-service rules)।
+//
+// নীতি: default-deny। কভার ছবি পাবলিক-পাঠযোগ্য (ব্লগ-পাঠক দেখবে), লিখতে/মুছতে পারে শুধু অ্যাডমিন (Firestore-এর users/{uid}.isAdmin == true)।
+// প্রাইভেট ক্লায়েন্ট-ফাইল এই পাথে রাখা যাবে না — Feature 3 (ক্লায়েন্ট পোর্টাল) আলাদা, সুরক্ষিত পাথ ও rules পাবে।
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAdmin() {
+      return request.auth != null
+          && request.auth.token.firebase.sign_in_provider != 'anonymous'
+          && firestore.get(/databases/(default)/documents/tvProject/main/users/$(request.auth.uid)).data.get('isAdmin', false) == true;
+    }
+
+    // blog/covers/{ফাইল}: শুধু ছবি (jpeg/png/webp), ≤ ২ MB, নিরাপদ ফাইলনাম (পাথ-ট্রাভার্সাল/স্পেস/ইউনিকোড ছাড়া)
+    match /blog/covers/{file} {
+      allow read: if true;
+      allow create: if isAdmin()
+                    && file.matches('[A-Za-z0-9._-]{1,120}')
+                    && request.resource.size <= 2 * 1024 * 1024
+                    && request.resource.contentType.matches('image/(jpeg|png|webp)');
+      allow update: if false;                      // ফাইল বদলাতে নতুন ফাইল আপলোড করুন (ক্যাশ-সমস্যা এড়াতে)
+      allow delete: if isAdmin();
+    }
+
+    // বাকি সবকিছু — default-deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

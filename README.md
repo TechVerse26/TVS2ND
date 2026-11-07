@@ -97,13 +97,15 @@ firestore.indexes.json  প্রয়োজনীয় কম্পোজি�
 firebase.json / .firebaserc  Firebase CLI কনফিগ (rules/indexes ডিপ্লয় + emulator)
 tests/                  Security Rules টেস্ট (Emulator) — scenarios.mjs + firestore.rules.test.mjs
 scripts/                পুরোনো ডেটা → tvProject/main মাইগ্রেশন স্ক্রিপ্ট
-docs/                   COMMUNITY_REPORT.md — স্ট্রাকচার, টেস্ট ফলাফল, পরিবর্তিত ফাইলের তালিকা
+docs/                   COMMUNITY_REPORT.md, BLOG_REPORT.md — স্ট্রাকচার, টেস্ট ফলাফল, পরিবর্তিত ফাইলের তালিকা
+storage.rules            Firebase Storage rules — শুধু ব্লগের কভার-ছবি (ঐচ্ছিক; ডিফল্ট-ডিনাই)
 css/
   styles.css            মূল ডিজাইন সিস্টেম — টোকেন, কম্পোনেন্ট, সেকশন (পাবলিক সাইট + অ্যাডমিন দুটোতেই লোড হয়)
   drawer.css             প্রোফাইল স্লাইডারের স্টাইল
   footer.css             ফুটার (Quick Links + Contact Us) ও তথ্য-শিটের স্টাইল
   admin.css              শুধু অ্যাডমিন প্যানেলের লেআউট (সাইডবার, টেবিল, ফর্ম) + কমিউনিটি মডারেশনের ছোট ব্লক
   community.css          কমিউনিটি UI (বিদ্যমান টোকেন পুনর্ব্যবহার)
+  blog.css               ব্লগ UI (শুধু বিদ্যমান টোকেন/ক্লাস; কোনো নতুন রঙ/গ্লো নেই)
 js/
   firebase-config.js      Firebase প্রজেক্ট কনফিগ
   tv-db.js                 সব Firestore পাথ এক জায়গায় — tvCol()/tvDoc() → tvProject/main/**
@@ -112,6 +114,14 @@ js/
   community/api.js         কমিউনিটির সব Firestore অপারেশন
   community/app.js         কমিউনিটি UI (ফিড, আলোচনার পাতা, রিপ্লাই, লাইক, রিপোর্ট, মেনু)
   admin-community.js       অ্যাডমিন: রিপোর্ট রিভিউ, আলোচনা/রিপ্লাই মডারেশন, ক্যাটাগরি
+  blog-entry.js            #blog ও #blog/{slug} রাউটার — Firebase ছাড়া চলে; মূল কোড lazy-load করে
+  blog/app.js              ব্লগ UI (তালিকা, সার্চ, লেখা, সূচিপত্র, শেয়ার, মন্তব্য, সম্পর্কিত লেখা)
+  blog/api.js              ব্লগের পাবলিক Firestore অপারেশন (পড়া + মন্তব্য)
+  blog/model.js            Firebase-মুক্ত শেয়ার্ড লজিক (সীমা, স্লাগ, পড়ার সময়, সার্চ-টোকেন, ভ্যালিডেশন)
+  blog/markdown.js         নিরাপদ Markdown রেন্ডারার + DOM-allowlist ছাঁকনি (কোনো লাইব্রেরি নেই)
+  blog/seo.js              ব্লগ-পাতার মেটা/OG/Twitter/canonical/JSON-LD (ছাড়লে আসল মান ফেরে)
+  blog/admin-api.js        অ্যাডমিন-ব্লগের লেখা-অপারেশন (CRUD, স্লাগ-ক্লেইম, ক্যাটাগরি, মডারেশন, কভার-আপলোড)
+  admin-blog.js            অ্যাডমিন: লেখা, এডিটর (প্রিভিউ/আপলোড), ক্যাটাগরি, মন্তব্য-মডারেশন
   auth.js                 Authentication (ইমেইল/Google/GitHub) + admin-status হেল্পার
   content.js               পাবলিক সাইটের জন্য Firestore থেকে কন্টেন্ট পড়ার লেয়ার
   seed-data.js              ডিফল্ট/নমুনা কন্টেন্ট — শুধু "সিড" করার জন্য
@@ -144,6 +154,11 @@ js/
 | `discussions/{id}` | আলোচনা (`title`, `body`, `category`, `status`, `likedBy`, `likeCount`, `replyCount`…) | নিচে "কমিউনিটি" |
 | `discussions/{id}/replies/{rid}` | রিপ্লাই | নিচে "কমিউনিটি" |
 | `reports/{uid_targetType_targetId}` | রিপোর্ট | তৈরি: লগইন করা ইউজার (ডুপ্লিকেট অসম্ভব) · পড়া/রিভিউ: অ্যাডমিন |
+| `blogCategories/{slug}` | ব্লগের ক্যাটাগরি (`name`, `order`, `active`) | পড়া: সবাই · লেখা: অ্যাডমিন (মুছতে হলে আগে নিষ্ক্রিয়) |
+| `blogPosts/{postId}` | ব্লগ-লেখা (`title`, `slug`, `content` (Markdown), `status` draft/published, `author`, `publishedAt`…) | পড়া: সবাই — শুধু `published`; খসড়া শুধু অ্যাডমিন · লেখা: শুধু অ্যাডমিন |
+| `blogPosts/{postId}/comments/{cid}` | ব্লগ-মন্তব্য (`status` pending/approved/hidden/deleted) | পড়া: সবাই শুধু `approved`; নিজেরটা নিজে · তৈরি: লগইন (pending, ২০ সেকেন্ড ব্যবধান) · মডারেশন: অ্যাডমিন |
+| `blogSlugs/{slug}` | স্লাগ-ইউনিকনেস ক্লেইম (`postId`) | শুধু অ্যাডমিন |
+| `blogCommentThrottle/{uid}` | মন্তব্যের ব্যবধান (`lastAt`) | শুধু লেখা (rules নিজে পড়ে) |
 
 অ্যাডমিন = `tvProject/main/users/{uid}.isAdmin == true` — শুধু এই প্রজেক্টের নিজস্ব `users`। এটা **rules-এই**
 যাচাই হয় (UI-তে অ্যাডমিন বাটন লুকানো শুধু সুবিধার জন্য)।
@@ -230,6 +245,19 @@ firebase deploy
   একটা জায়গায় বদলালেই সাইট, ফুটার, স্লাইডার ও অ্যাডমিন — সবখানে বদলে যাবে।
 - **আইকন:** সার্ভিস কার্ডের আইকন একটা নির্দিষ্ট (কিন্তু বেশ বড়) তালিকা থেকে বেছে নিতে হয়
   (`js/icons.js`) — সবগুলো একই স্ট্রোক-স্টাইলে আঁকা, যাতে নতুন আইকন যোগ করলেও ডিজাইন না ভাঙে।
+
+## ব্লগ / রিসোর্স
+
+পাবলিক: নেভে **Blog** → `#blog` (ফিচার্ড, ক্যাটাগরি-পিল, সার্চ, Load More) ও `#blog/{slug}` (সূচিপত্র, শেয়ার, মন্তব্য, সম্পর্কিত লেখা)।
+অ্যাডমিন: **ব্লগ** বিভাগ — লেখা (খসড়া/প্রকাশ/আনপাবলিশ/প্রিভিউ), ক্যাটাগরি (নিরাপদ মুছা + রিঅ্যাসাইন), মন্তব্য-মডারেশন।
+
+- লেখা **Markdown** (`##` হেডিং, তালিকা, কোড, টেবিল, ছবি `https`); কাঁচা HTML/স্ক্রিপ্ট সমর্থিত নয় (দুই-স্তরের নিরাপদ রেন্ডার)।
+- **মন্তব্য আগাম-অনুমোদিত** (অ্যাডমিন অনুমোদনের পর পাবলিকে) + ২০ সেকেন্ড ব্যবধান + `communityBlocked` ব্লক। সরাসরি-প্রকাশ চাইলে `firestore.rules`-এর `blogCommentStartStatus()` ও `js/blog/model.js`-এর `COMMENT_START_STATUS` একসাথে বদলান।
+- **ডিপ্লয়:** `firebase deploy --only firestore:rules,firestore:indexes` (নতুন ৮টা ইনডেক্স তৈরির অপেক্ষা করুন), তারপর সাইট। প্রথমে অ্যাডমিন → ব্লগ → ক্যাটাগরি → "ডিফল্ট ক্যাটাগরি বসান"।
+- **কভার-আপলোড ঐচ্ছিক:** Storage চালু করে `firebase deploy --only storage` দিলে কাজ করে; নইলে কভার-ছবির URL পেস্ট করুন (এটাই ডিফল্ট)।
+- ⚠️ hash-routing-এর সীমা: `#blog/…` সার্ভারে যায় না — সোশ্যাল-প্রিভিউ/ক্রলার হোমপেজের মেটা দেখে (বিস্তারিত ও সমাধান-প্রস্তাব: `docs/BLOG_REPORT.md`)।
+- টেস্ট: `cd tests && npm run test:offline` (rules ১০৫৩ সিনারিও + কন্ট্রাক্ট + ব্লগ-ইউনিট), `npm run test:mutation`, `npm run test:ui` (আসল Chromium; `npx playwright install chromium` লাগে)।
+- পূর্ণ রিপোর্ট (স্কিমা, rules, টেস্ট-ফলাফল, ম্যানুয়াল-টেস্ট, সীমাবদ্ধতা): [`docs/BLOG_REPORT.md`](docs/BLOG_REPORT.md)
 
 ## কমিউনিটি (আলোচনা)
 

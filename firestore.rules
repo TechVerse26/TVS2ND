@@ -5,7 +5,7 @@ rules_version = '2';
 //
 // নেমস্পেস: সব অ্যাপ-ডেটা  tvProject/main/**  (js/tv-db.js)। এর বাইরের সবকিছু default-deny।
 // এই ফাইল js/ এর আসল কোড (auth.js, drawer.js, app.js, admin.js, admin-community.js,
-// community/api.js, community/app.js, content.js) যে ফিল্ড-সেট লেখে ও যে কোয়েরি চালায় তার সাথে মেলানো।
+// community/api.js, community/app.js, content.js, blog/api.js, blog/admin-api.js) যে ফিল্ড-সেট লেখে ও যে কোয়েরি চালায় তার সাথে মেলানো।
 //
 // মূল নীতি
 //  • অ্যাডমিন = tvProject/main/users/{uid}.isAdmin == true  — শুধু Console/Admin SDK বা বিদ্যমান অ্যাডমিন বদলাতে পারে।
@@ -14,6 +14,8 @@ rules_version = '2';
 //  • আলোচনা/রিপ্লাই হার্ড-ডিলিট কারো জন্যই বন্ধ (soft-delete: status = deleted)।
 //  • replyCount বদলাতে হলে একই batch-এ আসল রিপ্লাই তৈরি/মুছা/মডারেশন লাগে (getAfter/existsAfter)।
 //  • Rules কোয়েরির ফলাফল ফিল্টার করে না — তাই পাবলিক list-এ status == 'active' ও limit ≤ 50 বাধ্যতামূলক।
+//  • ব্লগ: পাবলিক শুধু status == 'published' পোস্ট ও 'approved' মন্তব্য পড়ে; পোস্ট/ক্যাটাগরি/স্লাগ লেখা শুধু অ্যাডমিন; drafts পাবলিকের কাছে অদৃশ্য।
+//    স্লাগ ইউনিক রাখে blogSlugs/{slug} ক্লেইম-ডক (একই batch-এ getAfter দিয়ে মেলানো); মন্তব্যে ২০ সেকেন্ড throttle (blogCommentThrottle)।
 //
 // সীমা: rules দিয়ে rate-limit/স্প্যাম সম্পূর্ণ ঠেকানো যায় না → App Check চালু করুন (docs/FIRESTORE_RULES_REPORT.md)।
 // ============================================================================
@@ -45,6 +47,18 @@ service cloud.firestore {
     }
     function categoryPath(cid) {
       return /databases/$(database)/documents/tvProject/main/categories/$(cid);
+    }
+    function blogPostPath(pid) {
+      return /databases/$(database)/documents/tvProject/main/blogPosts/$(pid);
+    }
+    function blogSlugPath(slug) {
+      return /databases/$(database)/documents/tvProject/main/blogSlugs/$(slug);
+    }
+    function blogCategoryPath(cid) {
+      return /databases/$(database)/documents/tvProject/main/blogCategories/$(cid);
+    }
+    function blogThrottlePath(uid) {
+      return /databases/$(database)/documents/tvProject/main/blogCommentThrottle/$(uid);
     }
 
     // ------------------------------------------------------------------ অথ ও রোল
@@ -528,6 +542,163 @@ service cloud.firestore {
           && (!changed.hasAny(['resolutionNote']) || isText(d.resolutionNote, 0, 500));
     }
 
+    // ============================================================== blog (js/blog/*, js/admin-blog.js)
+    // ক্যাটাগরির নিয়ম কমিউনিটির মতোই (name ≤৪০, order, active) — validNewCategory()/validCategoryEdit() পুনর্ব্যবহার।
+
+    function isSlug(s) {
+      return s is string && s.size() <= 80 && s.matches('[a-z0-9]+(-[a-z0-9]+)*');
+    }
+
+    // ---- পোস্ট তৈরি — admin-api.js createPost() যা লেখে হুবহু এই ২৬টা ফিল্ড।
+    // author/authorAvatar ক্লায়েন্টের মানে ভরসা নয়: তৈরির মুহূর্তে অ্যাডমিনের নিজের users/{uid} প্রোফাইলের সাথে মেলাতে হয়।
+    // publishedAt: published হলে request.time, draft হলে null। স্লাগ অবশ্যই একই batch-এ blogSlugs/{slug}-এ এই পোস্টের নামে ক্লেইম হতে হবে।
+    function validNewBlogPost(pid) {
+      let d = request.resource.data;
+      let p = get(userPath(request.auth.uid)).data;
+      return hasExactly(d, ['title', 'slug', 'slugHistory', 'excerpt', 'content', 'contentFormat', 'coverImage', 'coverAlt', 'category', 'tags', 'status', 'language',
+                            'author', 'authorAvatar', 'createdBy', 'updatedBy', 'createdAt', 'updatedAt', 'publishedAt', 'featured', 'featuredOrder', 'commentsOpen',
+                            'readingTime', 'seoTitle', 'seoDescription', 'searchTokens'])
+          && isText(d.title, 3, 160)
+          && isSlug(d.slug)
+          && d.slugHistory is list && d.slugHistory.size() == 0
+          && isText(d.excerpt, 0, 400)
+          && isText(d.content, 1, 100000)
+          && d.contentFormat == 'markdown'
+          && isHttpUrlOrEmpty(d.coverImage)
+          && isText(d.coverAlt, 0, 200)
+          && d.category is string && d.category.matches('[a-z0-9-]{1,40}') && exists(blogCategoryPath(d.category))
+          && d.tags is list && d.tags.size() <= 10
+          && d.status in ['draft', 'published']
+          && d.language in ['bn', 'en']
+          && d.author is string && d.author == p.get('name', '') && d.author.size() <= 120
+          && d.authorAvatar is string && d.authorAvatar == p.get('avatarThumb', '')
+          && d.createdBy == request.auth.uid
+          && d.updatedBy == request.auth.uid
+          && d.createdAt == request.time
+          && d.updatedAt == request.time
+          && ((d.status == 'published' && d.publishedAt == request.time) || (d.status == 'draft' && d.publishedAt == null))
+          && d.featured in [true, false]
+          && d.featuredOrder is number && d.featuredOrder >= 0 && d.featuredOrder <= 9999
+          && d.commentsOpen is bool
+          && d.readingTime is int && d.readingTime >= 1 && d.readingTime <= 240
+          && isText(d.seoTitle, 0, 120)
+          && isText(d.seoDescription, 0, 320)
+          && d.searchTokens is list && d.searchTokens.size() <= 300
+          && getAfter(blogSlugPath(d.slug)).data.postId == pid;
+    }
+
+    // ---- পোস্ট এডিট: শুধু এই ফিল্ডগুলো বদলানো যায় (author/authorAvatar/createdBy/createdAt/contentFormat কখনো না)।
+    // শুধু যে ফিল্ড আসলে বদলাচ্ছে (diff) সেগুলোই যাচাই হয় — পুরোনো/মাইগ্রেট করা ডকও আটকে যায় না।
+    function validBlogPostEdit(pid) {
+      let d = request.resource.data;
+      let b = resource.data;
+      let changed = d.diff(b).affectedKeys();
+      return changed.hasOnly(['title', 'slug', 'slugHistory', 'excerpt', 'content', 'coverImage', 'coverAlt', 'category', 'tags', 'status', 'language',
+                              'updatedBy', 'updatedAt', 'publishedAt', 'featured', 'featuredOrder', 'commentsOpen', 'readingTime', 'seoTitle', 'seoDescription', 'searchTokens'])
+          && d.updatedBy == request.auth.uid                     // updatedBy একই অ্যাডমিন হলে অপরিবর্তিত থাকে — তাই diff নয়, মান যাচাই
+          && d.updatedAt == request.time                         // (এতেই updatedAt বদলাতে বাধ্য — আলাদা hasAll দরকার নেই)
+          && (!changed.hasAny(['title'])         || isText(d.title, 3, 160))
+          && (!changed.hasAny(['excerpt'])       || isText(d.excerpt, 0, 400))
+          && (!changed.hasAny(['content'])       || isText(d.content, 1, 100000))
+          && (!changed.hasAny(['coverImage'])    || isHttpUrlOrEmpty(d.coverImage))
+          && (!changed.hasAny(['coverAlt'])      || isText(d.coverAlt, 0, 200))
+          && (!changed.hasAny(['category'])      || (d.category is string && d.category.matches('[a-z0-9-]{1,40}') && exists(blogCategoryPath(d.category))))
+          && (!changed.hasAny(['tags'])          || (d.tags is list && d.tags.size() <= 10))
+          && (!changed.hasAny(['language'])      || d.language in ['bn', 'en'])
+          && (!changed.hasAny(['featured'])      || d.featured in [true, false])
+          && (!changed.hasAny(['featuredOrder']) || (d.featuredOrder is number && d.featuredOrder >= 0 && d.featuredOrder <= 9999))
+          && (!changed.hasAny(['commentsOpen'])  || d.commentsOpen is bool)
+          && (!changed.hasAny(['readingTime'])   || (d.readingTime is int && d.readingTime >= 1 && d.readingTime <= 240))
+          && (!changed.hasAny(['seoTitle'])      || isText(d.seoTitle, 0, 120))
+          && (!changed.hasAny(['seoDescription']) || isText(d.seoDescription, 0, 320))
+          && (!changed.hasAny(['searchTokens'])  || (d.searchTokens is list && d.searchTokens.size() <= 300))
+          && (!changed.hasAny(['status', 'publishedAt']) || blogPublishOk(d, b))
+          && (!changed.hasAny(['slug', 'slugHistory'])   || blogSlugChangeOk(pid, d, b));
+    }
+
+    // draft ↔ published ছাড়া কোনো স্ট্যাটাস নেই। publishedAt: প্রথম প্রকাশে request.time; পরে (আনপাবলিশ/রিপাবলিশে) আগের মানই থাকে
+    function blogPublishOk(d, b) {
+      return d.status in ['draft', 'published']
+          && (d.status == 'draft'
+              ? d.publishedAt == b.publishedAt
+              : (b.publishedAt != null ? d.publishedAt == b.publishedAt : d.publishedAt == request.time));
+    }
+
+    // স্লাগ বদল: পুরোনো স্লাগ slugHistory-তে যায় (পুরোনো লিংক নতুনে রিডাইরেক্ট করার জন্য), নতুন স্লাগের ক্লেইম একই batch-এ এই পোস্টের নামে থাকতে হয়।
+    // স্লাগ না বদলালে slugHistory শুধু ছোট হতে পারে (ক্লেইম ছেড়ে দেওয়ার সময়)।
+    function blogSlugChangeOk(pid, d, b) {
+      return isSlug(d.slug)
+          && d.slugHistory is list && d.slugHistory.size() <= 10
+          && ((d.slug == b.slug && b.slugHistory.hasAll(d.slugHistory))
+              || (d.slug != b.slug
+                  && b.slug in d.slugHistory
+                  && !(d.slug in d.slugHistory)
+                  && getAfter(blogSlugPath(d.slug)).data.postId == pid));
+    }
+
+    // ---- স্লাগ-ক্লেইম blogSlugs/{slug} = { postId, createdAt }: একটা স্লাগের মালিক একটাই পোস্ট (create ডক-আছে হলে আপডেট ধরা হয় ⇒ নিষিদ্ধ)
+    function validSlugClaim(slug) {
+      let d = request.resource.data;
+      return isSlug(slug)
+          && hasExactly(d, ['postId', 'createdAt'])
+          && isId(d.postId)
+          && d.createdAt == request.time
+          && getAfter(blogPostPath(d.postId)).data.slug == slug;
+    }
+    // ক্লেইম শুধু তখনই ছাড়া যায় যখন পোস্ট মুছে যাচ্ছে, অথবা পোস্ট আর এই স্লাগ (বর্তমান বা history) ব্যবহার করছে না
+    function blogClaimReleasable(slug) {
+      let pid = resource.data.postId;
+      return !existsAfter(blogPostPath(pid))
+          || (getAfter(blogPostPath(pid)).data.slug != slug && !(slug in getAfter(blogPostPath(pid)).data.slugHistory));
+    }
+
+    // ---- মন্তব্য blogPosts/{pid}/comments/{cid}
+    // নতুন মন্তব্যের শুরুর স্ট্যাটাস — js/blog/model.js-এর COMMENT_START_STATUS-এর সাথে মেলে। 'approved' করলে আগাম-অনুমোদন ছাড়া প্রকাশ হবে।
+    function blogCommentStartStatus() {
+      return 'pending';
+    }
+    function blogPostIsPublished(pid) {
+      return get(blogPostPath(pid)).data.status == 'published';
+    }
+    function blogCommentsOpen(pid) {
+      let p = get(blogPostPath(pid)).data;
+      return p.status == 'published' && p.get('commentsOpen', true) == true;
+    }
+    // স্প্যাম-ধীর করা: একই batch-এ throttle-ডক আপডেট (lastAt == request.time) বাধ্যতামূলক, আর আগের লেখা থেকে ≥২০ সেকেন্ড পার হতে হবে।
+    // (rules দিয়ে স্প্যাম সম্পূর্ণ ঠেকানো যায় না — আগাম-অনুমোদন + communityBlocked + App Check মিলে সুরক্ষা)
+    function blogCommentThrottleOk(uid) {
+      return getAfter(blogThrottlePath(uid)).data.lastAt == request.time
+          && (!exists(blogThrottlePath(uid))
+              || get(blogThrottlePath(uid)).data.lastAt + duration.value(20, 's') <= request.time);
+    }
+    // createComment() (blog/api.js) যা লেখে — হুবহু এই ৭টা ফিল্ড; লেখকের নাম/ছবি users/{uid} থেকে মেলাতে হয়
+    function validNewBlogComment(pid) {
+      let d = request.resource.data;
+      let p = get(userPath(request.auth.uid)).data;
+      return isSignedIn()
+          && hasExactly(d, ['uid', 'authorName', 'authorAvatar', 'body', 'status', 'createdAt', 'updatedAt'])
+          && d.uid == request.auth.uid
+          && p.get('communityBlocked', false) == false
+          && d.authorName is string && d.authorName == p.get('name', '')
+          && d.authorAvatar is string && d.authorAvatar == p.get('avatarThumb', '')
+          && isText(d.body, 2, 1500)
+          && d.status == blogCommentStartStatus()
+          && d.createdAt == request.time
+          && d.updatedAt == request.time
+          && blogCommentsOpen(pid)
+          && blogCommentThrottleOk(request.auth.uid);
+    }
+    // অ্যাডমিন মডারেশন — moderateComment(): status, updatedAt, moderatedBy, moderatedAt
+    function validBlogCommentModeration() {
+      let d = request.resource.data;
+      let changed = d.diff(resource.data).affectedKeys();
+      return changed.hasOnly(['moderatedAt', 'moderatedBy', 'status', 'updatedAt'])
+          && d.status in ['pending', 'approved', 'hidden', 'deleted']
+          && d.updatedAt == request.time
+          && d.moderatedBy == request.auth.uid
+          && d.moderatedAt == request.time;
+    }
+
     // ======================================================================================
     //                                   tvProject/main/**
     // ======================================================================================
@@ -689,6 +860,60 @@ service cloud.firestore {
         allow create: if validNewReport(reportId);
         allow update: if isAdmin() && validReportReview();
         // delete: কারো জন্যই নয় (অডিট-ট্রেইল)
+      }
+
+      // ---------------------------------------------------------------- blogCategories/{slug}
+      match /blogCategories/{categoryId} {
+        allow get: if true;
+        allow list: if request.query.limit <= 50;
+        allow list: if isAdmin();
+        allow create: if validNewCategory(categoryId) && isAdmin();
+        allow update: if validCategoryEdit() && isAdmin();
+        allow delete: if resource.data.active == false && isAdmin();     // আগে নিষ্ক্রিয় করতে হয় (UI আগে নির্ভরশীল পোস্ট দেখে/সরায়)
+      }
+
+      // ---------------------------------------------------------------- blogPosts/{postId}
+      match /blogPosts/{postId} {
+        allow get: if resource.data.status == 'published';
+        allow get: if isAdmin();                                          // অ্যাডমিন খসড়াও দেখে (প্রিভিউ)
+        allow list: if resource.data.status == 'published' && request.query.limit <= 50;
+        allow list: if isAdmin();
+
+        allow create: if isId(postId) && isAdmin() && validNewBlogPost(postId);
+        allow update: if isAdmin() && validBlogPostEdit(postId);
+        allow delete: if isAdmin() && resource.data.status == 'draft';    // প্রকাশিত পোস্ট আগে আনপাবলিশ করতে হয়
+
+        // -------------------------------------------------------------- blogPosts/{postId}/comments/{commentId}
+        match /comments/{commentId} {
+          allow get: if resource.data.status == 'approved' && blogPostIsPublished(postId);
+          allow get: if isOwner(resource.data.uid);                       // নিজের অপেক্ষমাণ মন্তব্য নিজে দেখে
+          allow get: if isAdmin();
+          allow list: if resource.data.status == 'approved' && request.query.limit <= 50 && blogPostIsPublished(postId);
+          allow list: if isOwner(resource.data.uid) && request.query.limit <= 50;
+          allow list: if isAdmin();
+
+          allow create: if isId(commentId) && validNewBlogComment(postId);
+          // মালিক: নিজের pending/approved মন্তব্য soft-delete (হার্ড-ডিলিট নেই)
+          allow update: if isOwner(resource.data.uid) && resource.data.status in ['pending', 'approved'] && validOwnerSoftDelete();
+          allow update: if isAdmin() && validBlogCommentModeration();
+          // delete: সাধারণত কারো জন্যই নয় (soft-delete)। একমাত্র ব্যতিক্রম — মূল পোস্ট মুছে ফেলার পর অনাথ মন্তব্য পরিষ্কার (admin-api.js deletePost())
+          allow delete: if isAdmin() && !exists(blogPostPath(postId));
+        }
+      }
+
+      // ---------------------------------------------------------------- blogSlugs/{slug} — স্লাগ-ইউনিকনেস ক্লেইম (শুধু অ্যাডমিন)
+      match /blogSlugs/{slug} {
+        allow get: if isAdmin();
+        allow create: if isAdmin() && validSlugClaim(slug);
+        allow delete: if isAdmin() && blogClaimReleasable(slug);
+        // update: কারো জন্যই নয়
+      }
+
+      // ---------------------------------------------------------------- blogCommentThrottle/{uid} — মন্তব্যের ২০ সেকেন্ড ব্যবধান (শুধু লেখা; পড়ে rules নিজে)
+      match /blogCommentThrottle/{uid} {
+        allow create: if isOwner(uid) && hasExactly(request.resource.data, ['lastAt']) && request.resource.data.lastAt == request.time;
+        allow update: if isOwner(uid) && changedKeys().hasOnly(['lastAt']) && request.resource.data.lastAt == request.time
+                      && resource.data.lastAt + duration.value(20, 's') <= request.time;
       }
     }
 

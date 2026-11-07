@@ -11,6 +11,7 @@ const SHELL_FILES = [
   "./css/drawer.css",
   "./css/footer.css",
   "./css/community.css",
+  "./css/blog.css",
   "./js/app.js",
   "./js/drawer.js",
   "./js/theme.js",
@@ -34,6 +35,12 @@ const SHELL_FILES = [
   "./js/community-entry.js",
   "./js/community/app.js",
   "./js/community/api.js",
+  "./js/blog-entry.js",
+  "./js/blog/app.js",
+  "./js/blog/api.js",
+  "./js/blog/model.js",
+  "./js/blog/markdown.js",
+  "./js/blog/seo.js",
   "./manifest.json",
   "./assets/logo.svg"
 ];
