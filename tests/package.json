@@ -2,17 +2,25 @@
   "name": "techverse-rules-tests",
   "private": true,
   "type": "module",
-  "description": "Tech Verse — Firestore Security Rules tests (Firebase Emulator + অফলাইন সিমুলেটর + client↔rules contract). Kept inside tests/ so the static site's deploy never installs these.",
-  "engines": { "node": ">=18.19" },
+  "description": "Tech Verse — Firestore Security Rules tests (Firebase Emulator + অফলাইন সিমুলেটর + client↔rules contract) এবং ব্লগের ইউনিট/কন্ট্রাক্ট/ব্রাউজার টেস্ট। Kept inside tests/ so the static site's deploy never installs these.",
+  "engines": {
+    "node": ">=18.19"
+  },
   "scripts": {
-    "test": "firebase emulators:exec --only firestore --project tv-rules-test --config ../firebase.json \"node --test firestore.rules.test.mjs contract.test.mjs\"",
-    "test:offline": "node --import ./offline/register.mjs firestore.rules.test.mjs && node contract.test.mjs",
-    "test:contract": "node contract.test.mjs",
-    "test:mutation": "node offline/mutation-check.mjs"
+    "test": "firebase emulators:exec --only firestore --project tv-rules-test --config ../firebase.json \"node --test firestore.rules.test.mjs contract.test.mjs blog.test.mjs blog-contract.test.mjs\"",
+    "test:offline": "node --import ./offline/register.mjs firestore.rules.test.mjs && node contract.test.mjs && node blog.test.mjs && node blog-contract.test.mjs",
+    "test:contract": "node contract.test.mjs && node blog-contract.test.mjs",
+    "test:blog": "node blog.test.mjs && node blog-contract.test.mjs",
+    "test:mutation": "node offline/mutation-check.mjs",
+    "test:ui": "node browser/blog-ui.test.mjs && node browser/blog-admin.test.mjs && node browser/regression.test.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^3.0.4",
     "firebase": "^10.13.0",
-    "firebase-tools": "^13.0.0"
+    "firebase-tools": "^13.0.0",
+    "playwright": "^1.56.0"
+  },
+  "comments": {
+    "test:ui": "আসল Chromium লাগে (শুধু test:ui-র জন্য): npm i && npx playwright install chromium। Firebase মক; ডেটা-অ্যাক্সেস আসল firestore.rules + indexes-এর বিরুদ্ধে চলে (tests/browser/harness.mjs)।"
   }
 }

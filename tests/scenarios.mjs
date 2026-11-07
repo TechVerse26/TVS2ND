@@ -65,6 +65,13 @@ export function seedChunks(types, withSettings = true) {
   return batches;
 }
 
+// ব্লগ সিড (rules বন্ধ রেখে বসানো হয়) — পোস্ট/মন্তব্যের সম্পূর্ণ বৈধ আকার
+const bseed = (o = {}) => ({ title: "Seed post", slug: "seed", slugHistory: [], excerpt: "short", content: "## Body", contentFormat: "markdown", coverImage: "", coverAlt: "", category: "web", tags: ["a"],
+  status: "published", language: "bn", author: "Admin", authorAvatar: "", createdBy: "ua", updatedBy: "ua", createdAt: base, updatedAt: base, publishedAt: base, featured: false, featuredOrder: 0,
+  commentsOpen: true, readingTime: 1, seoTitle: "", seoDescription: "", searchTokens: ["seed"], ...o });
+const bcom = (o = {}) => ({ uid: "u2", authorName: "Karim", authorAvatar: "", body: "seed comment", status: "approved", createdAt: base, updatedAt: base, ...o });
+const FUTURE = ts(Date.now() + 3_600_000);   // "এইমাত্র লেখা" ধরা হয় — সবসময় ২০ সেকেন্ডের জানালার ভেতরে
+
 export const SEED = {
   [P + "users/u1"]: user("Rahim"),
   [P + "users/u2"]: user("Karim"),
@@ -103,6 +110,36 @@ export const SEED = {
   [P + "settings/site"]: { heroTitle: "x", codeUrl: "", courseUrl: "" },
   [P + "settings/payment"]: { secret: "do-not-read" },
   [P + "services/legacy"]: { title: "Old", desc: "Old desc", icon: "code", order: 9, createdAt: base, legacyField: "x" }, // মাইগ্রেট-করা/পুরোনো ডক (বাড়তি ফিল্ড)
+  // ---- ব্লগ
+  [P + "blogCategories/web"]: { name: "Web", order: 1, active: true, createdAt: base },
+  [P + "blogCategories/tips"]: { name: "Tips", order: 2, active: true, createdAt: base },
+  [P + "blogCategories/old"]: { name: "Old", order: 3, active: false, createdAt: base },
+  [P + "blogPosts/p1"]: bseed({ slug: "hello-world" }),
+  [P + "blogPosts/p2"]: bseed({ slug: "secret-draft", status: "draft", publishedAt: null }),
+  [P + "blogPosts/p3"]: bseed({ slug: "closed-post", commentsOpen: false }),
+  [P + "blogPosts/p4"]: bseed({ slug: "new-name", slugHistory: ["older-name"] }),
+  [P + "blogPosts/p5"]: bseed({ slug: "was-live", status: "draft" }),                 // আগে প্রকাশিত ছিল (publishedAt আছে)
+  [P + "blogPosts/pdel"]: bseed({ slug: "del-me", status: "draft", publishedAt: null }),
+  [P + "blogSlugs/hello-world"]: { postId: "p1", createdAt: base },
+  [P + "blogSlugs/secret-draft"]: { postId: "p2", createdAt: base },
+  [P + "blogSlugs/closed-post"]: { postId: "p3", createdAt: base },
+  [P + "blogSlugs/new-name"]: { postId: "p4", createdAt: base },
+  [P + "blogSlugs/older-name"]: { postId: "p4", createdAt: base },
+  [P + "blogSlugs/was-live"]: { postId: "p5", createdAt: base },
+  [P + "blogSlugs/del-me"]: { postId: "pdel", createdAt: base },
+  [P + "blogPosts/p1/comments/c1"]: bcom({ uid: "u2", authorName: "Karim", status: "approved" }),
+  [P + "blogPosts/p1/comments/c2"]: bcom({ uid: "u1", authorName: "Rahim", status: "pending" }),
+  [P + "blogPosts/p1/comments/c3"]: bcom({ uid: "u2", authorName: "Karim", status: "pending" }),
+  [P + "blogPosts/p1/comments/c4"]: bcom({ uid: "u1", authorName: "Rahim", status: "approved" }),
+  [P + "blogPosts/p1/comments/c5"]: bcom({ uid: "u1", authorName: "Rahim", status: "hidden" }),
+  [P + "blogPosts/gone/comments/oc"]: bcom({ uid: "u2", authorName: "Karim", status: "approved" }),     // মূল পোস্ট মুছে গেছে — অনাথ মন্তব্য
+  [P + "blogPosts/p2/comments/cd"]: bcom({ uid: "u2", authorName: "Karim", status: "approved" }),   // আনপাবলিশ-করা পোস্টের পুরোনো অনুমোদিত মন্তব্য — পাবলিক পড়তে পারবে না
+  [P + "blogPosts/p6"]: bseed({ slug: "orphan-slug" }),                                // স্লাগ-ক্লেইম নেই (মেরামতের পরীক্ষা)
+  [P + "blogSlugs/free-claim"]: { postId: "x2", createdAt: base },                      // ক্লেইম আছে, পোস্ট এখনো নেই — পোস্ট-নিজের অ্যাডমিন-শর্ত আলাদা করে পরীক্ষার জন্য
+  [P + "blogSlugs/stale-claim"]: { postId: "gone", createdAt: base },                  // পোস্ট নেই — ছাড়া যায় এমন পুরোনো ক্লেইম
+  [P + "blogCommentThrottle/uold"]: { lastAt: OLD },
+  [P + "blogCommentThrottle/u1"]: { lastAt: OLD },
+  [P + "blogCommentThrottle/u2"]: { lastAt: FUTURE },
   ...Object.fromEntries(Object.entries(CT).map(([col, c]) => [P + `${col}/${c.id}`, c.doc]))
 };
 
@@ -132,6 +169,331 @@ const set = (path, data) => ({ op: "set", path: P + path, data });
 const merge = (path, data) => ({ op: "set", path: P + path, data, merge: true });
 const del = (path) => ({ op: "delete", path: P + path });
 const ANON = { tok: { firebase: { sign_in_provider: "anonymous", identities: {} } } };
+
+/* ---------------------------------------------------------------- ব্লগ: ডেটা-বিল্ডার (ক্লায়েন্ট যা লেখে হুবহু) */
+const dropUndef = (o) => { for (const k of Object.keys(o)) if (o[k] === undefined) delete o[k]; return o; };   // undefined = "ফিল্ড নেই" (আসল Firestore SDK undefined মান নিজেই প্রত্যাখ্যান করে — তাই কী সরানো হয়)
+const bpost = (o = {}) => dropUndef({ title: "Hello blog", slug: "my-new-post", slugHistory: [], excerpt: "short", content: "## body", contentFormat: "markdown", coverImage: "", coverAlt: "", category: "web", tags: ["a"],
+  status: "draft", language: "bn", author: "Admin", authorAvatar: "", createdBy: "ua", updatedBy: "ua", createdAt: S, updatedAt: S, publishedAt: null, featured: false, featuredOrder: 0,
+  commentsOpen: true, readingTime: 1, seoTitle: "", seoDescription: "", searchTokens: ["hello"], ...o });
+const bclaim = (pid, o = {}) => dropUndef({ postId: pid, createdAt: S, ...o });
+const newPostBatch = (pid, slug, over = {}, claimData = bclaim(pid)) => ({ op: "batch", ops: [
+  { op: "create", path: `${P}blogPosts/${pid}`, data: bpost({ slug, ...over }) },
+  { op: "create", path: `${P}blogSlugs/${slug}`, data: claimData }] });
+const bedit = (o = {}) => dropUndef({ updatedBy: "ua", updatedAt: S, ...o });
+const bcomment = (o = {}) => dropUndef({ uid: "u1", authorName: "Rahim", authorAvatar: "", body: "Nice post", status: "pending", createdAt: S, updatedAt: S, ...o });
+const commentBatch = (pid, cid, over = {}, who = "u1", thr = { lastAt: S }) => ({ op: "batch", ops: [
+  { op: "create", path: `${P}blogPosts/${pid}/comments/${cid}`, data: bcomment(over) },
+  { op: "set", path: `${P}blogCommentThrottle/${who}`, data: thr }] });
+const slugRename = (pid, from, to, claimData = bclaim(pid), post = { slug: to, slugHistory: [from] }) => ({ op: "batch", ops: [
+  { op: "update", path: `${P}blogPosts/${pid}`, data: bedit(post) },
+  { op: "create", path: `${P}blogSlugs/${to}`, data: claimData }] });
+const bmod = (o = {}) => dropUndef({ status: "approved", updatedAt: S, moderatedBy: "ua", moderatedAt: S, ...o });
+
+const blogScenarios = [
+  /* ===== ব্লগ ১) লগইন-ছাড়া পাঠক ===== */
+  T("blog-public", "can read a published post", null, get("blogPosts/p1"), true),
+  T("blog-public", "cannot read a draft post", null, get("blogPosts/p2"), false),
+  T("blog-public", "cannot read a non-existent post", null, get("blogPosts/nope"), false),
+  T("blog-public", "can list published posts (limit 9)", null, list("blogPosts", { status: "published" }, 9), true),
+  T("blog-public", "can list published posts by category", null, list("blogPosts", { status: "published", category: "web" }, 9), true),
+  T("blog-public", "can list published posts by slug (article lookup)", null, list("blogPosts", { status: "published", slug: "hello-world" }, 1), true),
+  T("blog-public", "can list featured published posts", null, list("blogPosts", { status: "published", featured: true }, 3), true),
+  T("blog-public", "limit(50) is the allowed maximum", null, list("blogPosts", { status: "published" }, 50), true),
+  T("blog-public", "cannot list posts without status filter (would expose drafts)", null, list("blogPosts", {}, 9), false),
+  T("blog-public", "cannot list draft posts", null, list("blogPosts", { status: "draft" }, 9), false),
+  T("blog-public", "cannot list by slug without status filter (draft lookup)", null, list("blogPosts", { slug: "secret-draft" }, 1), false),
+  T("blog-public", "cannot list without limit", null, list("blogPosts", { status: "published" }, null), false),
+  T("blog-public", "cannot list with limit(51)", null, list("blogPosts", { status: "published" }, 51), false),
+  T("blog-public", "cannot count posts", null, count("blogPosts", { status: "published" }), false),
+  T("blog-public", "can read a blog category", null, get("blogCategories/web"), true),
+  T("blog-public", "can list blog categories (limit 50)", null, list("blogCategories", {}, 50), true),
+  T("blog-public", "cannot list blog categories without limit", null, list("blogCategories", {}, null), false),
+  T("blog-public", "cannot read the slug registry", null, get("blogSlugs/hello-world"), false),
+  T("blog-public", "cannot read the throttle docs", null, get("blogCommentThrottle/u1"), false),
+  T("blog-public", "can list approved comments of a published post", null, list("blogPosts/p1/comments", { status: "approved" }, 20), true),
+  T("blog-public", "can read an approved comment of a published post", null, get("blogPosts/p1/comments/c1"), true),
+  T("blog-public", "cannot list approved comments of an unpublished post", null, list("blogPosts/p2/comments", { status: "approved" }, 20), false),
+  T("blog-public", "cannot read an approved comment of an unpublished post", null, get("blogPosts/p2/comments/cd"), false),
+  T("blog-public", "cannot list pending comments", null, list("blogPosts/p1/comments", { status: "pending" }, 20), false),
+  T("blog-public", "cannot list hidden comments", null, list("blogPosts/p1/comments", { status: "hidden" }, 20), false),
+  T("blog-public", "cannot list comments without status filter", null, list("blogPosts/p1/comments", {}, 20), false),
+  T("blog-public", "cannot list comments without limit", null, list("blogPosts/p1/comments", { status: "approved" }, null), false),
+  T("blog-public", "cannot read a pending comment", null, get("blogPosts/p1/comments/c2"), false),
+  T("blog-public", "cannot create a post", null, create("blogPosts/x1", bpost()), false),
+  T("blog-public", "cannot create a category", null, create("blogCategories/design", catDoc()), false),
+  T("blog-public", "cannot create a comment", null, commentBatch("p1", "cn1", {}, "u1"), false),
+  T("blog-public", "cannot write a throttle doc", null, create("blogCommentThrottle/u9", { lastAt: S }), false),
+
+  /* ===== ব্লগ ২) সাধারণ লগইন-ইউজার ===== */
+  T("blog-user", "cannot create a post (not admin)", "u1", newPostBatch("x1", "u1-post"), false),
+  T("blog-user", "cannot create a post with isAdmin as string 'true'", "ustr", newPostBatch("x1", "ustr-post"), false),
+  T("blog-user", "cannot edit a post", "u1", update("blogPosts/p1", bedit({ title: "Hacked title" })), false),
+  T("blog-user", "cannot publish a draft", "u1", update("blogPosts/p2", bedit({ status: "published", publishedAt: S })), false),
+  T("blog-user", "cannot delete a draft post", "u1", del("blogPosts/pdel"), false),
+  T("blog-user", "cannot delete a published post", "u1", del("blogPosts/p1"), false),
+  T("blog-user", "cannot read a draft post", "u1", get("blogPosts/p2"), false),
+  T("blog-user", "cannot list drafts", "u1", list("blogPosts", { status: "draft" }, 9), false),
+  T("blog-user", "cannot create a slug claim", "u1", create("blogSlugs/zz", bclaim("p1")), false),
+  T("blog-user", "cannot delete a slug claim", "u1", del("blogSlugs/del-me"), false),
+  T("blog-user", "cannot edit a category", "u1", update("blogCategories/web", { name: "Hacked" }), false),
+  T("blog-user", "cannot delete an inactive category", "u1", del("blogCategories/old"), false),
+  T("blog-user", "cannot read the slug registry", "u1", get("blogSlugs/hello-world"), false),
+  T("blog-user", "cannot read the throttle doc", "u1", get("blogCommentThrottle/u1"), false),
+
+  /* ===== ব্লগ ৩) মন্তব্য — তৈরি ===== */
+  T("blog-comments", "member can comment (old throttle → update path)", "u1", commentBatch("p1", "cn1"), true),
+  T("blog-comments", "member can comment (no throttle doc yet → create path)", "uav", commentBatch("p1", "cn1", { uid: "uav", authorName: "Avi", authorAvatar: "https://lh3.googleusercontent.com/a/avi-thumb" }, "uav"), true),
+  T("blog-comments", "comment needs to start as pending (self-approve denied)", "u1", commentBatch("p1", "cn1", { status: "approved" }), false),
+  T("blog-comments", "comment cannot start as hidden/deleted", "u1", commentBatch("p1", "cn1", { status: "hidden" }), false),
+  T("blog-comments", "comment uid spoof denied", "u1", commentBatch("p1", "cn1", { uid: "u2" }), false),
+  T("blog-comments", "comment authorName spoof denied", "u1", commentBatch("p1", "cn1", { authorName: "Admin" }), false),
+  T("blog-comments", "comment authorAvatar spoof denied", "u1", commentBatch("p1", "cn1", { authorAvatar: "https://evil.example.com/a.png" }), false),
+  T("blog-comments", "comment 1-char body denied", "u1", commentBatch("p1", "cn1", { body: "a" }), false),
+  T("blog-comments", "comment 1501-char body denied", "u1", commentBatch("p1", "cn1", { body: rep("a", 1501) }), false),
+  T("blog-comments", "comment 1500-char body allowed", "u1", commentBatch("p1", "cn1", { body: rep("a", 1500) }), true),
+  T("blog-comments", "comment body as number denied", "u1", commentBatch("p1", "cn1", { body: 12 }), false),
+  T("blog-comments", "comment with extra field (likeCount) denied", "u1", commentBatch("p1", "cn1", { likeCount: 0 }), false),
+  T("blog-comments", "comment with moderation fields denied", "u1", commentBatch("p1", "cn1", { moderatedBy: "ua", moderatedAt: S }), false),
+  T("blog-comments", "comment missing updatedAt denied", "u1", commentBatch("p1", "cn1", { updatedAt: undefined }), false),
+  T("blog-comments", "comment createdAt not server time denied", "u1", commentBatch("p1", "cn1", { createdAt: base }), false),
+  T("blog-comments", "comment updatedAt not server time denied (present but forged)", "u1", commentBatch("p1", "cn1", { updatedAt: base }), false),
+  T("blog-comments", "comment updatedAt in the future denied", "u1", commentBatch("p1", "cn1", { updatedAt: ts(4_000_000_000_000) }), false),
+  T("blog-comments", "comment createdAt in the future denied", "u1", commentBatch("p1", "cn1", { createdAt: ts(4_000_000_000_000) }), false),
+  T("blog-comments", "comment on a draft post denied", "u1", commentBatch("p2", "cn1"), false),
+  T("blog-comments", "comment on a post with comments closed denied", "u1", commentBatch("p3", "cn1"), false),
+  T("blog-comments", "comment on a non-existent post denied", "u1", commentBatch("ghost", "cn1"), false),
+  T("blog-comments", "comment id with slash/space denied", "u1", commentBatch("p1", "bad id"), false),
+  T("blog-comments", "blocked user cannot comment", "ub", commentBatch("p1", "cn1", { uid: "ub", authorName: "Blocked" }, "ub"), false),
+  T("blog-comments", "user without profile cannot comment", "unp", commentBatch("p1", "cn1", { uid: "unp", authorName: "" }, "unp"), false),
+  T("blog-comments", "anonymous-auth user cannot comment", "u1", commentBatch("p1", "cn1"), false, ANON),
+  T("blog-comments", "comment without the throttle write (alone) denied", "u1", create("blogPosts/p1/comments/cn1", bcomment()), false),
+  T("blog-comments", "comment with throttle lastAt not server time denied", "u1", commentBatch("p1", "cn1", {}, "u1", { lastAt: base }), false),
+  T("blog-comments", "comment with throttle of another user denied", "u1", commentBatch("p1", "cn1", {}, "uav"), false),
+  T("blog-comments", "second comment within 20s denied (throttle)", "u2", commentBatch("p1", "cn1", { uid: "u2", authorName: "Karim" }, "u2"), false),
+  T("blog-comments", "throttle doc cannot be rewound by owner", "u2", set("blogCommentThrottle/u2", { lastAt: OLD }), false),
+  T("blog-comments", "throttle doc alone cannot be bumped inside the window", "u2", set("blogCommentThrottle/u2", { lastAt: S }), false),
+  T("blog-comments", "throttle doc: another user's cannot be written", "u1", set("blogCommentThrottle/u2", { lastAt: S }), false),
+  T("blog-comments", "throttle doc with extra field denied", "u1", set("blogCommentThrottle/u1", { lastAt: S, note: "x" }), false),
+  T("blog-comments", "throttle doc cannot be deleted by owner", "u1", del("blogCommentThrottle/u1"), false),
+
+  /* ===== ব্লগ ৪) মন্তব্য — নিজের মন্তব্য, মুছা, পড়া ===== */
+  T("blog-own-comments", "owner can list own comments (any status)", "u1", list("blogPosts/p1/comments", { uid: "u1" }, 10), true),
+  T("blog-own-comments", "cannot list another user's comments by uid", "u1", list("blogPosts/p1/comments", { uid: "u2" }, 10), false),
+  T("blog-own-comments", "owner can read own pending comment", "u1", get("blogPosts/p1/comments/c2"), true),
+  T("blog-own-comments", "cannot read another user's pending comment", "u1", get("blogPosts/p1/comments/c3"), false),
+  T("blog-own-comments", "owner can soft-delete own pending comment", "u1", update("blogPosts/p1/comments/c2", { status: "deleted", updatedAt: S }), true),
+  T("blog-own-comments", "owner can soft-delete own approved comment", "u1", update("blogPosts/p1/comments/c4", { status: "deleted", updatedAt: S }), true),
+  T("blog-own-comments", "owner cannot un-hide own hidden comment via delete path", "u1", update("blogPosts/p1/comments/c5", { status: "deleted", updatedAt: S }), false),
+  T("blog-own-comments", "cannot soft-delete another user's comment", "u1", update("blogPosts/p1/comments/c1", { status: "deleted", updatedAt: S }), false),
+  T("blog-own-comments", "owner cannot approve own pending comment", "u1", update("blogPosts/p1/comments/c2", { status: "approved", updatedAt: S }), false),
+  T("blog-own-comments", "owner cannot edit own comment body", "u1", update("blogPosts/p1/comments/c2", { body: "edited after review", updatedAt: S }), false),
+  T("blog-own-comments", "owner cannot edit body + delete in one write", "u1", update("blogPosts/p1/comments/c2", { status: "deleted", body: "x", updatedAt: S }), false),
+  T("blog-own-comments", "owner cannot hard-delete own comment", "u1", del("blogPosts/p1/comments/c2"), false),
+  T("blog-own-comments", "owner cannot forge updatedAt on soft-delete", "u1", update("blogPosts/p1/comments/c2", { status: "deleted", updatedAt: base }), false),
+  T("blog-own-comments", "owner cannot reassign comment uid", "u1", update("blogPosts/p1/comments/c2", { uid: "u2", updatedAt: S }), false),
+
+  /* ===== ব্লগ ৫) অ্যাডমিন — পোস্ট তৈরি ===== */
+  T("blog-admin-create", "admin can create a draft + slug claim", "ua", newPostBatch("np1", "my-new-post"), true),
+  T("blog-admin-create", "admin can create a published post (publishedAt = server time)", "ua", newPostBatch("np1", "my-new-post", { status: "published", publishedAt: S }), true),
+  T("blog-admin-create", "admin can create with a cover image URL", "ua", newPostBatch("np1", "my-new-post", { coverImage: "https://images.example.com/c.webp" }), true),
+  T("blog-admin-create", "create without slug claim denied", "ua", create("blogPosts/np1", bpost()), false),
+  T("blog-admin-create", "create with a claim owned by another post id denied", "ua", newPostBatch("np1", "my-new-post", {}, bclaim("p9")), false),
+  T("blog-admin-create", "create with an already-claimed slug denied (uniqueness)", "ua", newPostBatch("np1", "hello-world"), false),
+  T("blog-admin-create", "create with the slug of a draft denied (uniqueness covers drafts)", "ua", newPostBatch("np1", "secret-draft"), false),
+  T("blog-admin-create", "create with an old (history) slug denied", "ua", newPostBatch("np1", "older-name"), false),
+  T("blog-admin-create", "slug with upper-case denied", "ua", newPostBatch("np1", "My-Post"), false),
+  T("blog-admin-create", "slug with spaces denied", "ua", newPostBatch("np1", "my post"), false),
+  T("blog-admin-create", "slug with double hyphen denied", "ua", newPostBatch("np1", "my--post"), false),
+  T("blog-admin-create", "slug 81 chars denied", "ua", newPostBatch("np1", rep("a", 81)), false),
+  T("blog-admin-create", "author name spoof denied (must match own profile)", "ua", newPostBatch("np1", "my-new-post", { author: "Someone Else" }), false),
+  T("blog-admin-create", "authorAvatar spoof denied", "ua", newPostBatch("np1", "my-new-post", { authorAvatar: "https://evil.example.com/x.png" }), false),
+  T("blog-admin-create", "createdBy spoof denied", "ua", newPostBatch("np1", "my-new-post", { createdBy: "ua2" }), false),
+  T("blog-admin-create", "updatedBy spoof denied", "ua", newPostBatch("np1", "my-new-post", { updatedBy: "ua2" }), false),
+  T("blog-admin-create", "createdAt not server time denied", "ua", newPostBatch("np1", "my-new-post", { createdAt: base }), false),
+  T("blog-admin-create", "draft with publishedAt set denied", "ua", newPostBatch("np1", "my-new-post", { publishedAt: S }), false),
+  T("blog-admin-create", "published with publishedAt null denied", "ua", newPostBatch("np1", "my-new-post", { status: "published", publishedAt: null }), false),
+  T("blog-admin-create", "published with a forged (past) publishedAt denied", "ua", newPostBatch("np1", "my-new-post", { status: "published", publishedAt: base }), false),
+  T("blog-admin-create", "status other than draft/published denied", "ua", newPostBatch("np1", "my-new-post", { status: "scheduled" }), false),
+  T("blog-admin-create", "unknown extra field denied", "ua", newPostBatch("np1", "my-new-post", { isFeaturedByAdmin: true }), false),
+  T("blog-admin-create", "missing required field (excerpt) denied", "ua", newPostBatch("np1", "my-new-post", { excerpt: undefined }), false),
+  T("blog-admin-create", "non-existent category denied", "ua", newPostBatch("np1", "my-new-post", { category: "ghost" }), false),
+  T("blog-admin-create", "category with upper-case/space denied", "ua", newPostBatch("np1", "my-new-post", { category: "Web Dev" }), false),
+  T("blog-admin-create", "title 2 chars denied", "ua", newPostBatch("np1", "my-new-post", { title: "ab" }), false),
+  T("blog-admin-create", "title 161 chars denied", "ua", newPostBatch("np1", "my-new-post", { title: rep("t", 161) }), false),
+  T("blog-admin-create", "empty content denied", "ua", newPostBatch("np1", "my-new-post", { content: "" }), false),
+  T("blog-admin-create", "content 100001 chars denied", "ua", newPostBatch("np1", "my-new-post", { content: rep("c", 100001) }), false),
+  T("blog-admin-create", "contentFormat 'html' denied (markdown only)", "ua", newPostBatch("np1", "my-new-post", { contentFormat: "html" }), false),
+  T("blog-admin-create", "coverImage javascript: URL denied", "ua", newPostBatch("np1", "my-new-post", { coverImage: "javascript:alert(1)" }), false),
+  T("blog-admin-create", "coverImage data: URL denied (no base64 in Firestore)", "ua", newPostBatch("np1", "my-new-post", { coverImage: "data:image/png;base64,AAAA" }), false),
+  T("blog-admin-create", "coverImage with space denied", "ua", newPostBatch("np1", "my-new-post", { coverImage: "https://x.example.com/a b.png" }), false),
+  T("blog-admin-create", "excerpt 401 chars denied", "ua", newPostBatch("np1", "my-new-post", { excerpt: rep("e", 401) }), false),
+  T("blog-admin-create", "11 tags denied", "ua", newPostBatch("np1", "my-new-post", { tags: Array.from({ length: 11 }, (_, i) => "t" + i) }), false),
+  T("blog-admin-create", "tags as string denied", "ua", newPostBatch("np1", "my-new-post", { tags: "a,b" }), false),
+  T("blog-admin-create", "301 search tokens denied", "ua", newPostBatch("np1", "my-new-post", { searchTokens: Array.from({ length: 301 }, (_, i) => "t" + i) }), false),
+  T("blog-admin-create", "non-empty slugHistory at creation denied", "ua", newPostBatch("np1", "my-new-post", { slugHistory: ["x"] }), false),
+  T("blog-admin-create", "readingTime 0 denied", "ua", newPostBatch("np1", "my-new-post", { readingTime: 0 }), false),
+  T("blog-admin-create", "readingTime as float denied", "ua", newPostBatch("np1", "my-new-post", { readingTime: 1.5 }), false),
+  T("blog-admin-create", "featuredOrder 10000 denied", "ua", newPostBatch("np1", "my-new-post", { featuredOrder: 10000 }), false),
+  T("blog-admin-create", "featured as string denied", "ua", newPostBatch("np1", "my-new-post", { featured: "yes" }), false),
+  T("blog-admin-create", "language 'fr' denied", "ua", newPostBatch("np1", "my-new-post", { language: "fr" }), false),
+  T("blog-admin-create", "seoTitle 121 chars denied", "ua", newPostBatch("np1", "my-new-post", { seoTitle: rep("s", 121) }), false),
+  T("blog-admin-create", "post id with space denied", "ua", newPostBatch("bad id", "my-new-post"), false),
+  T("blog-admin-create", "second admin (ua2) cannot claim authorship of first admin (createdBy mismatch)", "ua2", newPostBatch("np1", "my-new-post", { createdBy: "ua" }), false),
+  T("blog-admin-create", "admin without a name in profile cannot spoof a name", "ua2", newPostBatch("np1", "my-new-post", { author: "Admin" }), false),
+
+  /* ===== ব্লগ ৬) অ্যাডমিন — এডিট, প্রকাশ, স্লাগ বদল ===== */
+  T("blog-admin-edit", "admin can read a draft", "ua", get("blogPosts/p2"), true),
+  T("blog-admin-edit", "admin can list all posts (no status filter)", "ua", list("blogPosts", {}, 25), true),
+  T("blog-admin-edit", "admin can list drafts", "ua", list("blogPosts", { status: "draft" }, 25), true),
+  T("blog-admin-edit", "admin can edit title/excerpt/content", "ua", update("blogPosts/p1", bedit({ title: "New title", excerpt: "New excerpt", content: "## new" })), true),
+  T("blog-admin-edit", "admin can feature a post with an order", "ua", update("blogPosts/p1", bedit({ featured: true, featuredOrder: 2 })), true),
+  T("blog-admin-edit", "admin can close comments", "ua", update("blogPosts/p1", bedit({ commentsOpen: false })), true),
+  T("blog-admin-edit", "admin can change category to an existing one", "ua", update("blogPosts/p1", bedit({ category: "tips" })), true),
+  T("blog-admin-edit", "category change to non-existent denied", "ua", update("blogPosts/p1", bedit({ category: "ghost" })), false),
+  T("blog-admin-edit", "edit without updatedBy/updatedAt denied", "ua", update("blogPosts/p1", { title: "New title" }), false),
+  T("blog-admin-edit", "edit with forged updatedAt denied", "ua", update("blogPosts/p1", bedit({ updatedAt: base })), false),
+  T("blog-admin-edit", "edit with updatedBy of another admin denied", "ua", update("blogPosts/p1", bedit({ updatedBy: "ua2" })), false),
+  T("blog-admin-edit", "second admin can edit; updatedBy = self", "ua2", update("blogPosts/p1", bedit({ updatedBy: "ua2", title: "Edited by admin 2" })), true),
+  T("blog-admin-edit", "author cannot be changed", "ua", update("blogPosts/p1", bedit({ author: "Someone" })), false),
+  T("blog-admin-edit", "authorAvatar cannot be changed", "ua", update("blogPosts/p1", bedit({ authorAvatar: "https://lh3.googleusercontent.com/a/x" })), false),
+  T("blog-admin-edit", "createdBy cannot be changed", "ua", update("blogPosts/p1", bedit({ createdBy: "ua2" })), false),
+  T("blog-admin-edit", "createdAt cannot be changed", "ua", update("blogPosts/p1", bedit({ createdAt: S })), false),
+  T("blog-admin-edit", "contentFormat cannot be changed", "ua", update("blogPosts/p1", bedit({ contentFormat: "html" })), false),
+  T("blog-admin-edit", "unknown field cannot be added", "ua", update("blogPosts/p1", bedit({ viewCount: 5 })), false),
+  T("blog-admin-edit", "edit with an invalid cover URL denied", "ua", update("blogPosts/p1", bedit({ coverImage: "javascript:alert(1)" })), false),
+  T("blog-admin-edit", "edit with overlong title denied", "ua", update("blogPosts/p1", bedit({ title: rep("t", 161) })), false),
+  T("blog-admin-edit", "title set to null denied", "ua", update("blogPosts/p1", bedit({ title: null })), false),
+  T("blog-admin-edit", "publish a never-published draft (publishedAt = server time)", "ua", update("blogPosts/p2", bedit({ status: "published", publishedAt: S })), true),
+  T("blog-admin-edit", "publish with publishedAt left null denied", "ua", update("blogPosts/p2", bedit({ status: "published" })), false),
+  T("blog-admin-edit", "publish with a forged publishedAt denied", "ua", update("blogPosts/p2", bedit({ status: "published", publishedAt: base })), false),
+  T("blog-admin-edit", "publish with a future publishedAt denied", "ua", update("blogPosts/p2", bedit({ status: "published", publishedAt: ts(4_000_000_000_000) })), false),
+  T("blog-admin-edit", "unpublish keeps publishedAt", "ua", update("blogPosts/p1", bedit({ status: "draft" })), true),
+  T("blog-admin-edit", "unpublish that wipes publishedAt denied", "ua", update("blogPosts/p1", bedit({ status: "draft", publishedAt: null })), false),
+  T("blog-admin-edit", "republish keeps the original publishedAt", "ua", update("blogPosts/p5", bedit({ status: "published" })), true),
+  T("blog-admin-edit", "republish with a new publishedAt denied", "ua", update("blogPosts/p5", bedit({ status: "published", publishedAt: S })), false),
+  T("blog-admin-edit", "status 'archived' denied", "ua", update("blogPosts/p1", bedit({ status: "archived" })), false),
+  T("blog-admin-edit", "slug rename: new claim + old slug into history", "ua", slugRename("p1", "hello-world", "hello-renamed"), true),
+  T("blog-admin-edit", "slug rename without the claim denied", "ua", update("blogPosts/p1", bedit({ slug: "hello-renamed", slugHistory: ["hello-world"] })), false),
+  T("blog-admin-edit", "slug rename with a claim for another post denied", "ua", slugRename("p1", "hello-world", "hello-renamed", bclaim("p2")), false),
+  T("blog-admin-edit", "slug rename without pushing the old slug to history denied", "ua", slugRename("p1", "hello-world", "hello-renamed", bclaim("p1"), { slug: "hello-renamed" }), false),
+  T("blog-admin-edit", "slug rename to a slug claimed by another post denied", "ua", slugRename("p1", "hello-world", "secret-draft", bclaim("p1")), false),
+  T("blog-admin-edit", "slug rename to a slug claimed by another post's history denied", "ua", slugRename("p1", "hello-world", "older-name", bclaim("p1")), false),
+  T("blog-admin-edit", "slug rename to an invalid slug denied", "ua", slugRename("p1", "hello-world", "Hello Renamed"), false),
+  T("blog-admin-edit", "slug rename with history over 10 entries denied", "ua", slugRename("p1", "hello-world", "hello-renamed", bclaim("p1"), { slug: "hello-renamed", slugHistory: Array.from({ length: 11 }, (_, i) => "h" + i).concat(["hello-world"]) }), false),
+  T("blog-admin-edit", "switching back to an own old slug (claim already owned) allowed", "ua", update("blogPosts/p4", bedit({ slug: "older-name", slugHistory: ["new-name"] })), true),
+  T("blog-admin-edit", "switching to own old slug but keeping it in history denied", "ua", update("blogPosts/p4", bedit({ slug: "older-name", slugHistory: ["new-name", "older-name"] })), false),
+  T("blog-admin-edit", "release an old slug: drop from history + delete its claim (one batch)", "ua", { op: "batch", ops: [
+    { op: "update", path: `${P}blogPosts/p4`, data: bedit({ slugHistory: [] }) }, { op: "delete", path: `${P}blogSlugs/older-name` }] }, true),
+  T("blog-admin-edit", "deleting a claim while the post still has it in history denied", "ua", del("blogSlugs/older-name"), false),
+  T("blog-admin-edit", "deleting the current slug's claim denied", "ua", del("blogSlugs/hello-world"), false),
+  T("blog-admin-edit", "history may not grow without a slug change", "ua", update("blogPosts/p1", bedit({ slugHistory: ["injected"] })), false),
+  T("blog-admin-edit", "a slug claim cannot be created for a slug the post does not use", "ua", { op: "batch", ops: [
+    { op: "update", path: `${P}blogPosts/p1`, data: bedit({ title: "Just a title change" }) }, { op: "create", path: `${P}blogSlugs/sneaky`, data: bclaim("p1") }] }, false),
+  T("blog-admin-edit", "an existing claim cannot be re-pointed (update)", "ua", update("blogSlugs/hello-world", { postId: "p2" }), false),
+  T("blog-admin-edit", "an existing claim cannot be overwritten (set on existing)", "ua", set("blogSlugs/hello-world", bclaim("p2")), false),
+  T("blog-admin-edit", "admin can read a slug claim", "ua", get("blogSlugs/hello-world"), true),
+
+  /* ===== ব্লগ ৭) অ্যাডমিন — মুছা ===== */
+  T("blog-admin-delete", "admin can delete a draft + its claim (one batch)", "ua", { op: "batch", ops: [
+    { op: "delete", path: `${P}blogPosts/pdel` }, { op: "delete", path: `${P}blogSlugs/del-me` }] }, true),
+  T("blog-admin-delete", "admin can delete a draft (claim removed separately)", "ua", del("blogPosts/pdel"), true),
+  T("blog-admin-delete", "a draft's claim can be deleted only together with the post", "ua", del("blogSlugs/del-me"), false),
+  T("blog-admin-delete", "admin cannot delete a published post (unpublish first)", "ua", del("blogPosts/p1"), false),
+  T("blog-admin-delete", "deleting a post + an unrelated claim denied", "ua", { op: "batch", ops: [
+    { op: "delete", path: `${P}blogPosts/pdel` }, { op: "delete", path: `${P}blogSlugs/hello-world` }] }, false),
+
+  /* ===== ব্লগ ৮) অ্যাডমিন — মন্তব্য মডারেশন ===== */
+  T("blog-admin-moderate", "admin can list pending comments", "ua", list("blogPosts/p1/comments", { status: "pending" }, 25), true),
+  T("blog-admin-moderate", "admin can list all comments of an unpublished post", "ua", list("blogPosts/p2/comments", {}, 25), true),
+  T("blog-admin-moderate", "admin can approve a pending comment", "ua", update("blogPosts/p1/comments/c3", bmod()), true),
+  T("blog-admin-moderate", "admin can hide an approved comment", "ua", update("blogPosts/p1/comments/c1", bmod({ status: "hidden" })), true),
+  T("blog-admin-moderate", "admin can delete a comment (soft)", "ua", update("blogPosts/p1/comments/c1", bmod({ status: "deleted" })), true),
+  T("blog-admin-moderate", "admin can re-approve a hidden comment", "ua", update("blogPosts/p1/comments/c5", bmod()), true),
+  T("blog-admin-moderate", "moderation without moderatedBy denied", "ua", update("blogPosts/p1/comments/c3", bmod({ moderatedBy: undefined })), false),
+  T("blog-admin-moderate", "moderation with someone else's moderatedBy denied", "ua", update("blogPosts/p1/comments/c3", bmod({ moderatedBy: "ua2" })), false),
+  T("blog-admin-moderate", "moderation with forged moderatedAt denied", "ua", update("blogPosts/p1/comments/c3", bmod({ moderatedAt: base })), false),
+  T("blog-admin-moderate", "moderation with an unknown status denied", "ua", update("blogPosts/p1/comments/c3", bmod({ status: "spam" })), false),
+  T("blog-admin-moderate", "admin cannot edit a comment body", "ua", update("blogPosts/p1/comments/c3", bmod({ body: "rewritten" })), false),
+  T("blog-admin-moderate", "admin cannot change a comment's author", "ua", update("blogPosts/p1/comments/c3", bmod({ uid: "ua" })), false),
+  T("blog-admin-moderate", "admin cannot hard-delete a comment while its post exists", "ua", del("blogPosts/p1/comments/c3"), false),
+  T("blog-admin-moderate", "admin can clean up an orphan comment (post already deleted)", "ua", del("blogPosts/gone/comments/oc"), true),
+  T("blog-admin-moderate", "member cannot delete an orphan comment", "u1", del("blogPosts/gone/comments/oc"), false),
+  T("blog-admin-moderate", "the orphan comment's own author cannot hard-delete it either", "u2", del("blogPosts/gone/comments/oc"), false),
+  T("blog-admin-moderate", "orphan comment is unreadable to the public", null, get("blogPosts/gone/comments/oc"), false),
+  T("blog-admin-moderate", "admin cannot delete a comment in the same batch as its post (post still exists in 'before' state)", "ua", { op: "batch", ops: [
+    { op: "delete", path: `${P}blogPosts/pdel` }, { op: "delete", path: `${P}blogSlugs/del-me` }, { op: "delete", path: `${P}blogPosts/pdel/comments/none` }] }, false),
+  T("blog-admin-moderate", "admin can create a comment as themself (same rules as members)", "ua", commentBatch("p1", "cn1", { uid: "ua", authorName: "Admin" }, "ua"), true),
+
+  /* ===== ব্লগ ৯) ক্যাটাগরি ===== */
+  T("blog-categories", "admin can create a category", "ua", create("blogCategories/design", catDoc()), true),
+  T("blog-categories", "category id with upper-case denied", "ua", create("blogCategories/Design", catDoc()), false),
+  T("blog-categories", "category with extra field denied", "ua", create("blogCategories/design", catDoc({ postCount: 3 })), false),
+  T("blog-categories", "category name 41 chars denied", "ua", create("blogCategories/design", catDoc({ name: rep("n", 41) })), false),
+  T("blog-categories", "category createdAt not server time denied", "ua", create("blogCategories/design", catDoc({ createdAt: base })), false),
+  T("blog-categories", "admin can rename a category", "ua", update("blogCategories/web", { name: "Web Dev" }), true),
+  T("blog-categories", "admin can deactivate a category", "ua", update("blogCategories/web", { active: false }), true),
+  T("blog-categories", "category order as string denied", "ua", update("blogCategories/web", { order: "2" }), false),
+  T("blog-categories", "cannot delete an ACTIVE category (deactivate + reassign first)", "ua", del("blogCategories/web"), false),
+  T("blog-categories", "can delete an inactive category", "ua", del("blogCategories/old"), true),
+  T("blog-categories", "community categories are separate (blog admin write to /categories still needs rules)", "ua", create("categories/design", catDoc()), true),
+  T("blog-categories", "member cannot create a blog category", "u1", create("blogCategories/design", catDoc()), false),
+
+  /* ===== ব্লগ ১০) পাথ ও অন্যান্য ===== */
+  T("blog-paths", "unknown subcollection under a post denied (even for admin)", "ua", create("blogPosts/p1/private/x", { a: 1 }), false),
+  T("blog-paths", "subcollection under a comment denied", "ua", create("blogPosts/p1/comments/c1/likes/u1", { a: 1 }), false),
+  T("blog-paths", "legacy root-level blogPosts denied for admin", "ua", { op: "get", path: "blogPosts/p1" }, false),
+  T("blog-paths", "subcollection under a category denied", "ua", create("blogCategories/web/posts/p1", { a: 1 }), false),
+  T("blog-paths", "throttle docs: admin cannot read them either", "ua", get("blogCommentThrottle/u1"), false),
+
+  /* ===== ব্লগ ১১) আলাদা-আলাদা শর্ত আলাদা করে পরীক্ষা (mutation-check যে ফাঁক দেখিয়েছে) ===== */
+  T("blog-isolated", "member with a fully valid post payload (own identity) still cannot create it", "u1", newPostBatch("x1", "u1-post", { author: "Rahim", createdBy: "u1", updatedBy: "u1" }, bclaim("x1")), false),
+  T("blog-isolated", "member with a valid edit payload (own uid) still cannot edit a post", "u1", update("blogPosts/p1", bedit({ updatedBy: "u1", title: "Hijacked" })), false),
+  T("blog-isolated", "member cannot create a post even when its slug claim already exists (post-level admin check)", "u1", create("blogPosts/x2", bpost({ slug: "free-claim", author: "Rahim", createdBy: "u1", updatedBy: "u1" })), false),
+  T("blog-isolated", "admin can create a post whose slug claim already exists for it", "ua", create("blogPosts/x2", bpost({ slug: "free-claim" })), true),
+  T("blog-isolated", "member cannot create a slug claim even for an existing post's slug", "u1", create("blogSlugs/orphan-slug", bclaim("p6")), false),
+  T("blog-isolated", "admin can repair a missing slug claim for an existing post", "ua", create("blogSlugs/orphan-slug", bclaim("p6")), true),
+  T("blog-isolated", "member cannot release a stale slug claim", "u1", del("blogSlugs/stale-claim"), false),
+  T("blog-isolated", "admin can release a stale slug claim (post gone)", "ua", del("blogSlugs/stale-claim"), true),
+  T("blog-isolated", "member cannot create another user's throttle doc", "u1", create("blogCommentThrottle/uav", { lastAt: S }), false),
+  T("blog-isolated", "member cannot bump another user's (expired) throttle doc", "u1", set("blogCommentThrottle/uold", { lastAt: S }), false),
+  T("blog-isolated", "owner can bump own throttle doc after the window", "uold", set("blogCommentThrottle/uold", { lastAt: S }), true),
+  T("blog-isolated", "owner cannot write a forged lastAt into own expired throttle doc", "uold", set("blogCommentThrottle/uold", { lastAt: base }), false),
+  T("blog-isolated", "owner cannot create own throttle doc with a forged lastAt", "uav", create("blogCommentThrottle/uav", { lastAt: base }), false),
+  T("blog-isolated", "comment batch with a forged-but-valid throttle lastAt (old) denied", "u1", commentBatch("p1", "cn1", {}, "u1", { lastAt: OLD }), false),
+  T("blog-isolated", "member cannot moderate someone else's pending comment", "u1", update("blogPosts/p1/comments/c3", bmod({ moderatedBy: "u1" })), false),
+  T("blog-isolated", "member cannot moderate (approve) own pending comment", "u1", update("blogPosts/p1/comments/c2", bmod({ moderatedBy: "u1" })), false),
+  T("blog-isolated", "owner list of own comments needs a limit", "u1", list("blogPosts/p1/comments", { uid: "u1" }, null), false),
+  T("blog-isolated", "owner list of own comments: limit(51) denied", "u1", list("blogPosts/p1/comments", { uid: "u1" }, 51), false),
+  T("blog-isolated", "create: updatedAt not server time denied", "ua", newPostBatch("np1", "my-new-post", { updatedAt: base }), false),
+  T("blog-isolated", "slug claim with forged createdAt denied", "ua", newPostBatch("np1", "my-new-post", {}, bclaim("np1", { createdAt: base })), false),
+  T("blog-isolated", "slug claim with an extra field denied", "ua", newPostBatch("np1", "my-new-post", {}, bclaim("np1", { note: "x" })), false),
+  T("blog-isolated", "edit: updatedAt forged (different from stored) denied", "ua", update("blogPosts/p1", bedit({ updatedAt: ts(1_700_000_001_000) })), false),
+  T("blog-isolated", "edit: updatedAt left unchanged denied", "ua", update("blogPosts/p1", { updatedBy: "ua", title: "No timestamp bump" }), false),
+  T("blog-isolated", "edit: content 100001 chars denied", "ua", update("blogPosts/p1", bedit({ content: rep("c", 100001) })), false),
+  T("blog-isolated", "edit: content emptied denied", "ua", update("blogPosts/p1", bedit({ content: "" })), false),
+  T("blog-isolated", "edit: 11 tags denied", "ua", update("blogPosts/p1", bedit({ tags: Array.from({ length: 11 }, (_, i) => "t" + i) })), false),
+  T("blog-isolated", "edit: 10 tags allowed", "ua", update("blogPosts/p1", bedit({ tags: Array.from({ length: 10 }, (_, i) => "t" + i) })), true),
+  T("blog-isolated", "edit: tags as string denied", "ua", update("blogPosts/p1", bedit({ tags: "a,b" })), false),
+  T("blog-isolated", "edit: language 'fr' denied", "ua", update("blogPosts/p1", bedit({ language: "fr" })), false),
+  T("blog-isolated", "edit: language 'en' allowed", "ua", update("blogPosts/p1", bedit({ language: "en" })), true),
+  T("blog-isolated", "edit: featuredOrder 10000 denied", "ua", update("blogPosts/p1", bedit({ featuredOrder: 10000 })), false),
+  T("blog-isolated", "edit: featuredOrder -1 denied", "ua", update("blogPosts/p1", bedit({ featuredOrder: -1 })), false),
+  T("blog-isolated", "edit: featuredOrder as string denied", "ua", update("blogPosts/p1", bedit({ featuredOrder: "1" })), false),
+  T("blog-isolated", "edit: featured as string denied", "ua", update("blogPosts/p1", bedit({ featured: "yes" })), false),
+  T("blog-isolated", "edit: commentsOpen as string denied", "ua", update("blogPosts/p1", bedit({ commentsOpen: "no" })), false),
+  T("blog-isolated", "edit: readingTime 0 denied", "ua", update("blogPosts/p1", bedit({ readingTime: 0 })), false),
+  T("blog-isolated", "edit: readingTime 241 denied", "ua", update("blogPosts/p1", bedit({ readingTime: 241 })), false),
+  T("blog-isolated", "edit: readingTime float denied", "ua", update("blogPosts/p1", bedit({ readingTime: 2.5 })), false),
+  T("blog-isolated", "edit: searchTokens 301 denied", "ua", update("blogPosts/p1", bedit({ searchTokens: Array.from({ length: 301 }, (_, i) => "t" + i) })), false),
+  T("blog-isolated", "edit: seoTitle 121 chars denied", "ua", update("blogPosts/p1", bedit({ seoTitle: rep("s", 121) })), false),
+  T("blog-isolated", "edit: seoDescription 321 chars denied", "ua", update("blogPosts/p1", bedit({ seoDescription: rep("s", 321) })), false),
+  T("blog-isolated", "edit: coverAlt 201 chars denied", "ua", update("blogPosts/p1", bedit({ coverAlt: rep("a", 201) })), false),
+  T("blog-isolated", "edit: excerpt 401 chars denied", "ua", update("blogPosts/p1", bedit({ excerpt: rep("e", 401) })), false),
+  T("blog-isolated", "edit: cover https URL allowed", "ua", update("blogPosts/p1", bedit({ coverImage: "https://images.example.com/c.png" })), true),
+  T("blog-isolated", "edit: cover cleared (empty) allowed", "ua", update("blogPosts/p1", bedit({ coverImage: "" })), true),
+  T("blog-isolated", "edit: cover with data: URL denied", "ua", update("blogPosts/p1", bedit({ coverImage: "data:image/png;base64,AAAA" })), false),
+  T("blog-isolated", "edit: unpublish + feature in one write allowed", "ua", update("blogPosts/p1", bedit({ status: "draft", featured: false })), true),
+];
 
 export const scenarios = [
   /* ============================ ১) লগইন-ছাড়া (anonymous) ============================ */
@@ -808,5 +1170,8 @@ export const scenarios = [
   T("malformed", "profile photoURL as number denied", "unew", create("users/unew", newProfile({ photoURL: 5 })), false),
   T("malformed", "category order as float 1.5 allowed (number) but string denied", "ua", create("categories/design", catDoc({ order: "1" })), false),
   T("malformed", "content field null denied", "ua", update("services/s1", { title: null }), false),
-  T("malformed", "content field deleted via update(FieldValue.delete) not testable — null icon denied", "ua", update("services/s1", { icon: null }), false)
+  T("malformed", "content field deleted via update(FieldValue.delete) not testable — null icon denied", "ua", update("services/s1", { icon: null }), false),
+
+  /* ============================ ১৫) ব্লগ (blogPosts / comments / blogSlugs / blogCategories / throttle) ============================ */
+  ...blogScenarios
 ];

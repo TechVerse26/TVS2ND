@@ -66,7 +66,8 @@ test("rules_version 2, শেষে default-deny, কোনো পাবলি�
 });
 test("rules শুধু প্রত্যাশিত কালেকশনে match করে (অজানা কালেকশন নেই)", () => {
   const top = [...RULES.matchAll(/\n {6}match (\/[^{\s]+(?:\/\{[^}]+\})?) \{/g)].map((m) => m[1].replace(/\/\{.*$/, ""));
-  assert.deepEqual(sorted(top), sorted(["/users", "/bookings", "/settings/site", "/services", "/portfolio", "/caseStudies", "/testimonials", "/team", "/stats", "/pricingPlans", "/faqItems", "/categories", "/discussions", "/reports"]));
+  assert.deepEqual(sorted(top), sorted(["/users", "/bookings", "/settings/site", "/services", "/portfolio", "/caseStudies", "/testimonials", "/team", "/stats", "/pricingPlans", "/faqItems", "/categories", "/discussions", "/reports",
+    "/blogCategories", "/blogPosts", "/blogSlugs", "/blogCommentThrottle"]));       // ব্লগ (js/blog/*)
 });
 test("content.js-এর CONTENT_COLLECTIONS = rules-এর ৮টা কন্টেন্ট match", () => {
   const client = strs(CONTENT.match(/CONTENT_COLLECTIONS = \[([^\]]*)\]/)[1].replace(/"/g, "'"));
@@ -171,7 +172,7 @@ test("স্ট্যাটাস: api.js STATUS = rules মডারেশন-�
 test("কোয়েরি-সীমা: পাবলিক কোয়েরির limit ≤ ৫০ (rules-এর সীমা)", () => {
   const ps = Number(/PAGE_SIZE = (\d+)/.exec(API)[1]), rp = Number(/REPLY_PAGE = (\d+)/.exec(API)[1]);
   assert.ok(ps <= 50 && rp <= 50 && /limit\(50\)/.test(API));
-  assert.equal((RULES.match(/request\.query\.limit <= 50/g) || []).length, 3, "পাবলিক list: categories, discussions, replies — ৩টাতেই limit ≤ ৫০");
+  assert.equal((RULES.match(/request\.query\.limit <= 50/g) || []).length, 7, "list: categories, discussions, replies + ব্লগ (blogCategories, blogPosts, মন্তব্য-অনুমোদিত, মন্তব্য-নিজের) — ৭টাতেই limit ≤ ৫০");
 });
 test("ক্যাটাগরি: write payload = rules; ডিফল্ট আইডি/নাম rules-সম্মত", () => {
   const keys = sorted(ruleList(fnBody(RULES, "validNewCategory"), "hasExactly"));
@@ -220,7 +221,7 @@ test("firebase.json: rules ও indexes পাথ ঠিক; ইমুলেট�
   assert.equal(JSON.parse(read(".firebaserc")).projects.default, "tvsitesofficial");
 });
 test("firestore.indexes.json: ক্লায়েন্টের সব কম্পোজিট কোয়েরির ইনডেক্স আছে", () => {
-  const idx = JSON.parse(read("firestore.indexes.json")).indexes.map((x) => `${x.collectionGroup}:${x.fields.map((f) => `${f.fieldPath}/${f.order[0]}`).join(",")}`);
+  const idx = JSON.parse(read("firestore.indexes.json")).indexes.map((x) => `${x.collectionGroup}:${x.fields.map((f) => `${f.fieldPath}/${(f.order || f.arrayConfig)[0]}`).join(",")}`);
   for (const need of ["bookings:uid/A,createdAt/D", "discussions:status/A,createdAt/D", "discussions:status/A,category/A,createdAt/D", "replies:status/A,createdAt/A", "reports:status/A,createdAt/D"])
     assert.ok(idx.includes(need), "ইনডেক্স নেই: " + need);
 });
