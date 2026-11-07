@@ -9,6 +9,9 @@ export class Unsupported extends Error {}     // আমার interpreter যা
 
 /* ------------------------------------------------------------------ মান-ধরন */
 export class Ts { constructor(ms) { this.ms = ms; } }
+export class Dur { constructor(ms) { this.ms = ms; } }                       // duration.value(n, 'unit') — ব্লগ-মন্তব্যের throttle rule-এর জন্য যোগ করা
+const DURATION_NS = Object.freeze({ __ns: "duration" });
+const DUR_UNITS = { w: 604800000, d: 86400000, h: 3600000, m: 60000, s: 1000, ms: 1, ns: 1e-6 };
 class RPath { constructor(segs) { this.segs = segs; } }
 class RSet { constructor(items) { this.items = []; for (const x of items) if (!this.items.some((y) => eq(x, y))) this.items.push(x); } }
 class RResource { constructor(data, id) { this.data = data; this.id = id; } }
@@ -27,12 +30,13 @@ export function eq(a, b) {
   if (a === b) return true;
   if (typeof a === "number" && typeof b === "number") return a === b;
   if (a instanceof Ts && b instanceof Ts) return a.ms === b.ms;
+  if (a instanceof Dur && b instanceof Dur) return a.ms === b.ms;
   if (a instanceof RPath && b instanceof RPath) return a.segs.join("/") === b.segs.join("/");
   if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((x, i) => eq(x, b[i]));
   if (isPlainMap(a) && isPlainMap(b)) { const ka = Object.keys(a), kb = Object.keys(b); return ka.length === kb.length && ka.every((k) => k in b && eq(a[k], b[k])); }
   return false;
 }
-const typeName = (v) => v === null ? "null" : Array.isArray(v) ? "list" : v instanceof RSet ? "set" : v instanceof Ts ? "timestamp" : v instanceof RPath ? "path"
+const typeName = (v) => v === null ? "null" : Array.isArray(v) ? "list" : v instanceof RSet ? "set" : v instanceof Ts ? "timestamp" : v instanceof Dur ? "duration" : v instanceof RPath ? "path"
   : typeof v === "number" ? (Number.isInteger(v) ? "int" : "float") : typeof v === "string" ? "string" : typeof v === "boolean" ? "bool" : isPlainMap(v) ? "map" : "other";
 
 /* ------------------------------------------------------------------ lexer */
@@ -218,6 +222,7 @@ class Evaluator {
     for (let e = env; e; e = e.parent) if (n.name in e.vars) return e.vars[n.name];
     const g = this.ctx.globals;
     if (n.name in g) return g[n.name];
+    if (n.name === "duration") return DURATION_NS;
     // ব্যবহারকারী-ফাংশন নাম (প্যারামিটার ছাড়া) নয় — অজানা শনাক্তকারী
     this.fail("unknown identifier " + n.name);
   }
@@ -245,6 +250,8 @@ class Evaluator {
   evBin(op, a, b) {
     if (op === "==") return eq(a, b);
     if (op === "!=") return !eq(a, b);
+    if (op === "+" && ((a instanceof Ts && b instanceof Dur) || (a instanceof Dur && b instanceof Ts))) return new Ts(a.ms + b.ms);
+    if (op === "-" && a instanceof Ts && b instanceof Dur) return new Ts(a.ms - b.ms);
     if (op === "+") { if (typeof a === "number" && typeof b === "number") return a + b; if (typeof a === "string" && typeof b === "string") return a + b; this.fail("+ type mismatch " + typeName(a) + "," + typeName(b)); }
     if (op === "-") { if (typeof a === "number" && typeof b === "number") return a - b; this.fail("- type mismatch"); }
     if (op === "*" || op === "/" || op === "%") throw new Unsupported("arith " + op);
@@ -299,6 +306,12 @@ class Evaluator {
   }
   evMethod(o, name, a) {
     if (o === null || o === undefined) this.fail("method on null: " + name);
+    if (o === DURATION_NS) {
+      if (name !== "value") throw new Unsupported("duration." + name);
+      const mult = DUR_UNITS[a[1]];
+      if (typeof a[0] !== "number" || mult === undefined) this.fail("duration.value args");
+      return new Dur(a[0] * mult);
+    }
     if (typeof o === "string") {
       switch (name) {
         case "size": return [...o].length;
