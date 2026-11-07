@@ -178,3 +178,30 @@ body.admin-body{ background: var(--bg); }
   .cm-adm-cat{ grid-template-columns:1fr 84px; }
   .cm-adm-cat .cat-badge{ justify-self:start; }
 }
+
+/* ---------- ব্লগ (js/admin-blog.js) — বিদ্যমান .admin-card/.form-grid/.field/.chip/.btn/.modal টোকেন-ভিত্তিক ---------- */
+.bl-adm-search{ max-width:420px; margin-bottom:14px; }
+.bl-adm-addrow{ grid-template-columns: 1fr 1fr 110px auto; }
+.bl-adm-h{ margin:10px 0 0; font-size:1.05rem; }
+.bl-ed{ padding:22px; }
+.bl-ed-status{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:18px; }
+.bl-toolbar{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+.bl-toolbar .btn{ min-width:38px; min-height:36px; padding:0 10px; }
+.bl-toolbar .btn svg{ width:16px; height:16px; }
+.bl-md{ font-family: var(--font-mono); font-size:.92rem; line-height:1.7; min-height:340px; resize:vertical; }
+.bl-cover-row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.bl-cover-row input[type="url"]{ flex:1; min-width:220px; }
+.bl-upload{ cursor:pointer; }
+.bl-serp{ padding:14px 16px; border:1px solid var(--border); border-radius: var(--radius-m); background: var(--surface-2); margin-bottom:8px; }
+.bl-serp-t{ color: var(--accent); font-size:1.05rem; font-weight:600; line-height:1.4; overflow-wrap:anywhere; }
+.bl-serp-u{ color: var(--mint-ink); font-size:.82rem; margin:2px 0 4px; overflow-wrap:anywhere; }
+.bl-serp-d{ color: var(--text-muted); font-size:.88rem; line-height:1.55; overflow-wrap:anywhere; }
+.bl-ed-actions{ position:sticky; bottom:0; z-index:5; margin-top:8px; padding:14px 0 6px; background: var(--surface); border-top:1px solid var(--border); }
+.bl-ed-right{ display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end; }
+.bl-preview{ max-height:68vh; overflow:auto; padding:4px 6px 16px; }
+@media (max-width: 760px){
+  .bl-adm-addrow{ grid-template-columns:1fr 1fr; }
+  .bl-ed{ padding:16px; }
+  .bl-ed-actions{ flex-direction:column-reverse; align-items:stretch; }
+  .bl-ed-right .btn{ flex:1; }
+}

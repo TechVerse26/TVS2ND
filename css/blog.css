@@ -1,0 +1,154 @@
+/* css/blog.css — ব্লগ / রিসোর্স
+   নতুন ডিজাইন-সিস্টেম নয়: সব রঙ, স্পেসিং, রেডিয়াস, ফন্ট css/styles.css-এর :root টোকেন থেকে; কার্ড/ব্যাজ/চিপ/ফিল্ড/বাটন/স্কেলিটন বিদ্যমান ক্লাস
+   (.pf-card, .pf-tag, .pf-cover, .tone-*, .chip, .filter-row, .field, .btn, .skel*, .empty-state) ও community.css-এর (.cm-av, .cm-reply*, .cm-state, .cm-foot,
+   .cm-spin, .cm-banner, .cm-overlay) পুনর্ব্যবহার করে। কোনো গ্লো, গ্র্যাডিয়েন্ট বা ভারী ছায়া নেই। */
+
+.bl-section[hidden]{ display:none !important; }
+.bl-section{ padding: 40px 0 96px; }
+.bl-head{ margin-bottom: 24px; }
+.bl-head h2:focus, .bl-article h1:focus, .bl-nf:focus{ outline:none; }      /* প্রোগ্রাম্যাটিক ফোকাস (ভিউ বদলে স্ক্রিন-রিডারের জন্য) — ইন্টারঅ্যাক্টিভ নয়, তাই রিং লাগে না */
+
+/* ---------- সার্চ ও ক্যাটাগরি ---------- */
+.bl-tools{ display:flex; flex-direction:column; gap:16px; margin-bottom: 28px; }
+.bl-tools .filter-row{ margin-bottom:0; }
+.bl-search{ position:relative; max-width: 440px; }
+.bl-search-ico{ position:absolute; inset-inline-start:14px; top:50%; transform: translateY(-50%); color: var(--text-faint); display:flex; pointer-events:none; }
+.bl-search-ico svg{ width:18px; height:18px; }
+.bl-search-input{
+  width:100%; min-height:48px; padding: 11px 44px 11px 42px; background: var(--surface-2); border:1.5px solid var(--field-border);
+  border-radius:14px; color: var(--text); transition: border-color var(--dur-1) var(--ease), background-color var(--dur-1) var(--ease);
+}
+.bl-search-input::placeholder{ color: var(--text-faint); opacity:.75; }
+.bl-search-input:focus{ border-color: var(--accent); background: var(--surface); outline:none; box-shadow: 0 0 0 1px var(--accent); }
+.bl-search-input::-webkit-search-cancel-button{ display:none; }              /* নিজস্ব ক্লিয়ার বাটন আছে */
+.bl-search-clear{
+  position:absolute; inset-inline-end:6px; top:50%; transform: translateY(-50%); width:36px; height:36px; border:none; border-radius:50%;
+  background:transparent; color: var(--text-faint); cursor:pointer; display:flex; align-items:center; justify-content:center;
+}
+.bl-search-clear:hover{ background: var(--surface-3); color: var(--text); }
+.bl-search-clear[hidden]{ display:none; }
+.bl-search-clear svg{ width:18px; height:18px; }
+
+/* ---------- কার্ড-গ্রিড (সার্ভিস-গ্রিডের মতো ৩ → ২ → ১) ---------- */
+.bl-subhead{ font-size:1.05rem; margin: 0 0 14px; }
+.bl-featured{ margin-bottom: 34px; }
+.bl-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:20px; }
+.bl-grid:empty{ display:none; }
+.bl-card{ position:relative; transition: border-color var(--dur-1) var(--ease); }
+.bl-card:hover{ border-color: var(--t-line, var(--border-strong)); }
+.bl-card .pf-media{ border-bottom:1px solid var(--border); }
+.bl-cover-fallback{ aspect-ratio:16/9; }                                     /* .pf-cover ডিফল্ট ১৬/৬ — ব্লগ-কার্ডে ছবির সাথে উচ্চতা মেলাতে ১৬/৯ */
+.bl-body{ padding: 18px 20px 14px; flex:1; }
+.bl-tags{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.bl-feat-badge{ display:inline-flex; align-items:center; gap:4px; font-size:.76rem; font-weight:700; color: var(--accent); }
+.bl-feat-badge svg{ width:14px; height:14px; }
+.bl-card h3{ font-size:1.08rem; margin:12px 0 8px; line-height:1.5; }
+.bl-link{ color: inherit; }
+.bl-link:hover{ color: var(--accent); }
+.bl-link::after{ content:""; position:absolute; inset:0; border-radius: var(--radius-l); }   /* পুরো কার্ড ক্লিকযোগ্য, অথচ সেমান্টিক লিংক একটাই */
+.bl-link:focus-visible{ outline:none; }
+.bl-link:focus-visible::after{ outline:2px solid var(--ring); outline-offset:-2px; }
+.bl-excerpt{ display:-webkit-box; -webkit-line-clamp:3; line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; line-height:1.7; }
+.bl-meta{ display:flex; align-items:center; gap:10px; padding: 12px 20px 16px; border-top:1px solid var(--border); }
+.bl-meta .cm-av{ margin-top:0; }
+.bl-meta-txt{ display:flex; flex-direction:column; min-width:0; line-height:1.45; font-size:.88rem; }
+.bl-meta-txt b{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bl-sub{ color: var(--text-faint); font-size:.78rem; }
+.bl-skel-img{ aspect-ratio:16/9; border-radius: var(--radius-s); margin-bottom:16px; }
+.bl-skel-title{ height:16px; margin-top:14px; }
+
+/* ---------- লেখার পাতা ---------- */
+.bl-post-wrap{ max-width: 820px; }
+.bl-crumb{ margin-bottom: 12px; }
+.bl-crumb .btn{ padding: 0 12px 0 8px; }
+.bl-draft{ margin: 0 0 18px; background: var(--accent-soft); border-color: var(--accent-line); color: var(--text); }
+.bl-article-head h1{ font-size: clamp(1.7rem, 3.4vw, 2.4rem); line-height:1.3; margin: 14px 0 12px; }
+.bl-lead{ font-size:1.1rem; color: var(--text-muted); line-height:1.75; }
+.bl-byline{ display:flex; align-items:center; gap:12px; margin-top:18px; }
+.bl-byline-txt{ display:flex; flex-direction:column; line-height:1.45; min-width:0; }
+.bl-byline-txt .bl-sub{ font-size:.84rem; }
+.bl-cover{ margin: 26px 0 8px; border-radius: var(--radius-l); overflow:hidden; border:1px solid var(--border); background: var(--surface-2); }
+.bl-cover img{ display:block; width:100%; height:auto; aspect-ratio:16/9; object-fit:cover; }
+.bl-cover.bl-cover-fallback{ display:flex; align-items:center; justify-content:center; background: var(--t-bg); border-color: var(--t-line); }
+
+.bl-toc-wrap{ margin-top:24px; }
+.bl-toc{ border:1px solid var(--border); background: var(--surface); border-radius: var(--radius-m); padding:16px 20px; }
+.bl-toc h2{ font-size:.95rem; margin:0 0 10px; }
+.bl-toc ol{ list-style:none; margin:0; padding:0; display:grid; gap:2px; }
+.bl-toc a{ display:block; padding:6px 10px; border-radius: var(--radius-s); color: var(--text-muted); font-size:.92rem; line-height:1.5; }
+.bl-toc a:hover{ background: var(--surface-2); color: var(--text); }
+.bl-toc a[aria-current="true"]{ background: var(--accent-soft); color: var(--accent); font-weight:600; }
+.bl-toc li.l3 a{ padding-inline-start:26px; }
+
+/* বিষয়বস্তুর টাইপোগ্রাফি — আসল রেন্ডার markdown.js-এর allowlist ট্যাগ থেকে */
+.bl-content{ margin-top:28px; font-size:1.05rem; line-height:1.9; overflow-wrap:anywhere; }
+.bl-content > :first-child{ margin-top:0; }
+.bl-content p{ margin: 0 0 1.15em; }
+.bl-content h2, .bl-content h3, .bl-content h4{ line-height:1.4; margin: 1.9em 0 .6em; scroll-margin-top: 84px; }
+.bl-content h2{ font-size:1.5rem; } .bl-content h3{ font-size:1.25rem; } .bl-content h4{ font-size:1.1rem; }
+.bl-content a{ color: var(--accent); text-decoration:underline; text-underline-offset:3px; }
+.bl-content a:hover{ color: var(--accent-strong); }
+.bl-content ul, .bl-content ol{ margin: 0 0 1.15em; padding-inline-start:1.5em; }
+.bl-content ul{ list-style:disc; } .bl-content ol{ list-style:decimal; }
+.bl-content li{ margin:.35em 0; }
+.bl-content li > ul, .bl-content li > ol{ margin: .35em 0 0; }
+.bl-content blockquote{ margin:1.4em 0; padding:12px 18px; background: var(--surface-2); border:1px solid var(--border); border-inline-start:3px solid var(--accent); border-radius: var(--radius-s); color: var(--text-muted); }
+.bl-content blockquote > :last-child{ margin-bottom:0; }
+.bl-content code{ font-family: var(--font-mono); font-size:.88em; background: var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:.1em .4em; }
+.bl-content pre{ position:relative; margin:1.4em 0; padding:16px 18px; background: var(--surface-2); border:1px solid var(--border); border-radius: var(--radius-m); overflow-x:auto; font-size:.88rem; line-height:1.7; }
+.bl-content pre code{ background:none; border:none; padding:0; font-size:inherit; white-space:pre; }
+.bl-copycode{
+  position:absolute; top:8px; inset-inline-end:8px; padding:3px 10px; border-radius:8px; border:1px solid var(--border-strong); background: var(--surface);
+  color: var(--text-muted); font-size:.74rem; font-weight:600; cursor:pointer; line-height:1.6;
+}
+.bl-copycode:hover{ border-color: var(--accent); color: var(--accent); }
+.bl-content img{ display:block; max-width:100%; height:auto; margin:1.4em 0; border-radius: var(--radius-m); border:1px solid var(--border); }
+.bl-content hr{ border:none; border-top:1px solid var(--border); margin:2em 0; }
+.bl-table-wrap{ overflow-x:auto; margin:1.4em 0; border:1px solid var(--border); border-radius: var(--radius-m); }
+.bl-content table{ border-collapse:collapse; width:100%; min-width:420px; font-size:.94rem; }
+.bl-content th, .bl-content td{ padding:10px 14px; border-bottom:1px solid var(--border); text-align:start; }
+.bl-content th{ background: var(--surface-2); font-weight:700; }
+.bl-content tbody tr:last-child td{ border-bottom:none; }
+.bl-content .al-c{ text-align:center; } .bl-content .al-r{ text-align:end; }
+
+.bl-article-foot{ margin-top:34px; padding-top:20px; border-top:1px solid var(--border); display:flex; flex-direction:column; gap:18px; }
+.bl-taglist{ display:flex; flex-wrap:wrap; gap:8px; list-style:none; margin:0; padding:0; }
+.bl-tag{ display:inline-block; padding:4px 12px; border-radius:999px; background: var(--surface-2); border:1px solid var(--border); color: var(--text-muted); font-size:.8rem; font-weight:600; }
+.bl-share{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.bl-share-t{ display:inline-flex; align-items:center; gap:6px; margin-inline-end:4px; font-weight:700; font-size:.88rem; color: var(--text-muted); }
+.bl-share-t svg{ width:16px; height:16px; }
+.bl-share-btn svg{ width:18px; height:18px; }
+
+/* ---------- মন্তব্য ও সম্পর্কিত লেখা ---------- */
+.bl-comments, .bl-related{ margin-top:48px; padding-top:28px; border-top:1px solid var(--border); }
+.bl-comments h2, .bl-related h2{ font-size:1.25rem; margin-bottom:18px; }
+.bl-count{ color: var(--text-faint); font-weight:600; }
+.bl-comment-list{ display:flex; flex-direction:column; gap:14px; margin-bottom:22px; }
+.bl-comment.is-pending .cm-reply-box{ background: var(--surface); border:1px dashed var(--border-strong); }
+.bl-pending{ color: var(--info); font-weight:600; }
+.bl-note{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:14px 16px; border-radius: var(--radius-m); background: var(--surface-2); border:1px solid var(--border); color: var(--text-muted); font-size:.92rem; }
+.bl-note svg{ flex-shrink:0; }
+.bl-note-login{ justify-content:space-between; }
+.bl-note-empty{ justify-content:center; text-align:center; margin-bottom:18px; }
+.bl-comform-wrap{ margin-top:8px; }
+.bl-form .field{ margin-bottom:12px; }
+.bl-form textarea{ min-height:96px; }
+.bl-form .btn svg{ width:18px; height:18px; }
+.bl-nf{ font-size:1.3rem; margin-bottom:10px; }
+
+/* ---------- রেসপন্সিভ (বিদ্যমান ব্রেকপয়েন্ট: 980 / 900 / 560) ---------- */
+@media (max-width: 980px){
+  .bl-grid{ grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px){
+  .bl-section{ padding: 24px 0 72px; }
+  .bl-grid{ grid-template-columns: 1fr; }
+  .bl-search{ max-width:none; }
+  .bl-content{ font-size:1rem; line-height:1.85; }
+  .bl-article-head h1{ font-size:1.6rem; }
+  .bl-note-login{ flex-direction:column; align-items:flex-start; }
+}
+/* হেডার-নেভে "Blog" যোগ হওয়ায় ৮টা লিংক — ৯০১–১১০০px-এ এক সারিতে ধরাতে প্যাডিং আরেকটু কমানো (community.css-এ ৭টার জন্য ১১px ছিল) */
+@media (min-width: 901px) and (max-width: 1100px){
+  .nav-links a{ padding: 7px 9px; font-size:.86rem; }
+}
